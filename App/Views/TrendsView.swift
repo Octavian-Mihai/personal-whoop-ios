@@ -23,7 +23,6 @@ struct TrendsView: View {
                     line("Rest", \.rest, .purple, "")
                     loadCard
                     digestCard
-                    effectsCard
                     Disclaimer()
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
@@ -73,24 +72,6 @@ struct TrendsView: View {
                 Text("Balance: \(d.balance)").font(.caption).foregroundStyle(.secondary)
                 ForEach(d.movers, id: \.metric) { m in
                     HStack { Text(m.metric); Spacer(); Text(String(format: "%+.1f", m.delta)).monospacedDigit() }.font(.caption)
-                }
-            }
-        }
-    }
-
-    private var effectsCard: some View {
-        Card(title: "What moves your Charge", subtitle: "Journal behaviours at lag 0–2 days. Association, never cause.") {
-            if model.effects.isEmpty { Text("Log a few behaviours in the journal (≥ 5 days each way)").font(.footnote) }
-            ForEach(model.effects.prefix(6)) { e in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(e.name).font(.subheadline)
-                        Text("lag \(e.lag)d · n=\(e.nWith)/\(e.nWithout)").font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text(String(format: "d %+.2f", e.cohenD)).font(.caption.monospacedDigit())
-                    TierBadge(tier: e.tier)
-                    if e.significant { Image(systemName: "checkmark.seal.fill").foregroundStyle(.green) }
                 }
             }
         }

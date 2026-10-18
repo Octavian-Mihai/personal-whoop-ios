@@ -19,7 +19,6 @@ final class AppModel {
     var autoSuggestion: (start: Double, end: Double)?
     var circadian: CircadianEstimate?
     var cycle: CycleEstimate?
-    var effects: [BehaviorEffect] = []
     var digest: WeeklyDigest?
     var streak: (current: Int, longest: Int) = (0, 0)
     var fitnessAge: Double?
@@ -27,6 +26,7 @@ final class AppModel {
     var sleepNeedMin: Double = 480
     var lastNight: SleepSession?
     var liveEffort: Double?
+    var live: LiveWorkout?
 
     let ble = BLEManager()
     private let url: URL = {
@@ -35,6 +35,7 @@ final class AppModel {
         return dir.appendingPathComponent("personalwhoop.json")
     }()
 
+    var ui: UISettings { get { snapshot.ui ?? UISettings() } set { snapshot.ui = newValue; save() } }
     var settings: AppSettings { get { snapshot.settings } set { snapshot.settings = newValue; save() } }
     var days: [DailyMetric] { snapshot.days }
     var today: DailyMetric? { snapshot.days.last }
@@ -51,9 +52,7 @@ final class AppModel {
         if let d = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(Snapshot.self, from: d), !s.days.isEmpty {
             snapshot = s
         } else {
-            let h = DemoData.history()
-            snapshot.days = h.days
-            snapshot.journal = h.journal
+            snapshot.days = DemoData.history()
         }
     }
     /// Raw synthetic streams are generated off the main thread so the first frame isn't blocked.
@@ -68,8 +67,7 @@ final class AppModel {
     func save() { if let d = try? JSONEncoder().encode(snapshot) { try? d.write(to: url, options: .atomic) } }
 
     func resetDemo() {
-        let h = DemoData.history(seed: UInt64.random(in: 1...9999))
-        snapshot.days = h.days; snapshot.journal = h.journal
+        snapshot.days = DemoData.history(seed: UInt64.random(in: 1...9999))
         snapshot.workouts.removeAll(); snapshot.hydration.removeAll()
         raw = nil
         recompute()
@@ -170,12 +168,7 @@ final class AppModel {
         if let v = zOf(recent.map(\.respiration), b.respiration, sign: 1) { zs["Respiration"] = v }
         if let v = zOf(recent.map(\.hrv), b.hrv, sign: -1) { zs["HRV"] = v }
         if let t = recent.compactMap(\.skinTempDev).min(), let l = recent.last?.skinTempDev { zs["Skin temp"] = min(t, l) / 0.3 }
-        var conf = Set<IllnessSignalEngine.Confounder>()
-        let recentTags = snapshot.journal.suffix(4).flatMap(\.tags).map { $0.lowercased() }
-        if recentTags.contains(where: { $0.contains("alcohol") }) { conf.insert(.alcohol) }
-        if recentTags.contains(where: { $0.contains("workout") }) { conf.insert(.workout) }
-        if recentTags.contains(where: { $0.contains("sick") }) { conf.insert(.sick) }
-        illness = IllnessSignalEngine.evaluate(zs: zs, baselineTrusted: b.hrv.status == .trusted, confounders: conf, nights: days.count)
+        illness = IllnessSignalEngine.evaluate(zs: zs, baselineTrusted: b.hrv.status == .trusted, confounders: [], nights: days.count)
     }
 
     private func updateVitality() {
@@ -206,10 +199,6 @@ final class AppModel {
     }
 
     private func updateInsights() {
-        var tagDays: [String: Set<Int>] = [:]
-        let idx = Dictionary(uniqueKeysWithValues: days.enumerated().map { ($1.day, $0) })
-        for e in snapshot.journal { if let i = idx[e.day] { for t in e.tags { tagDays[t, default: []].insert(i) } } }
-        effects = EffectRanker.rank(behaviours: tagDays, outcome: days.map(\.charge))
         func last7(_ kp: KeyPath<DailyMetric, Double?>, _ off: Int) -> [Double] {
             let end = days.count - off, start = max(0, end - 7)
             return end > start ? days[start..<end].compactMap { $0[keyPath: kp] } : []
@@ -222,7 +211,18 @@ final class AppModel {
     }
 
     // MARK: live data
+    func startWorkout(_ kind: WorkoutKind) {
+        live?.cancel()
+        live = LiveWorkout(kind: kind, profile: settings.profile, restingHR: today?.restingHR ?? 60, ble: ble)
+    }
+    func finishWorkout(save: Bool) {
+        guard let l = live else { return }
+        if save, let w = l.finish() { addWorkout(w) } else { l.cancel() }
+        live = nil
+    }
+
     func ingestLive(bpm: Int, rr: [Double]) {
+        live?.ingest(bpm: bpm)
         let now = Date().timeIntervalSince1970
         snapshot.liveHR.append(HRSample(t: now, bpm: Double(bpm)))
         if snapshot.liveHR.count > 20_000 { snapshot.liveHR.removeFirst(2_000) }
@@ -239,7 +239,6 @@ final class AppModel {
     var hydrationGoal: Int { HydrationGoal.goalML(male: settings.profile.male, effort: today?.effort) }
 
     func addWorkout(_ w: SavedWorkout) { snapshot.workouts.append(w); snapshot.workouts.sort { $0.start > $1.start }; recompute() }
-    func addJournal(_ e: JournalEntry) { snapshot.journal.append(e); recompute() }
     func addLift(_ l: LiftWorkoutLog) { snapshot.lifts.insert(l, at: 0); save() }
 
     func exportBackup() -> URL? {

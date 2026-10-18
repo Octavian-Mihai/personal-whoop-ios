@@ -6,10 +6,14 @@ import UIKit
 struct WorkoutsView: View {
     @Environment(AppModel.self) private var model
     @State private var showAdd = false
+    @State private var showStart = false
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Button { showStart = true } label: { Label("Start a workout", systemImage: "play.circle.fill").font(.headline) }
+                }
                 Section("Heatmap · last 13 weeks") { heatmap }
                 if !model.detected.isEmpty {
                     Section("Detected today") {
@@ -25,10 +29,12 @@ struct WorkoutsView: View {
                 Section("Logged") {
                     if model.snapshot.workouts.isEmpty { Text("Nothing logged yet").foregroundStyle(.secondary) }
                     ForEach(model.snapshot.workouts) { w in
+                        NavigationLink { WorkoutDetailView(workout: w) } label: {
                         VStack(alignment: .leading) {
                             Text("\(w.sport) · \(fmtDuration((w.end - w.start) / 60))").font(.headline)
                             Text(Date(timeIntervalSince1970: w.start).formatted(date: .abbreviated, time: .shortened) + (w.kcal.map { String(format: " · %.0f kcal", $0) } ?? ""))
                                 .font(.caption).foregroundStyle(.secondary)
+                        }
                         }
                     }
                 }
@@ -41,6 +47,7 @@ struct WorkoutsView: View {
             .navigationTitle("Workouts")
             .toolbar { Button { showAdd = true } label: { Image(systemName: "plus") } }
             .sheet(isPresented: $showAdd) { ManualWorkoutSheet() }
+            .sheet(isPresented: $showStart) { WorkoutStartSheet() }
         }
     }
 

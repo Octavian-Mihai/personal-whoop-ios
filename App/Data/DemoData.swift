@@ -18,12 +18,11 @@ enum DemoData {
     }
 
     /// 60 days of nightly metrics. The last day carries no charge/effort so the live pipeline fills it.
-    static func history(days n: Int = 60, now: Date = Date(), seed: UInt64 = 7) -> (days: [DailyMetric], journal: [JournalEntry]) {
+    static func history(days n: Int = 60, now: Date = Date(), seed: UInt64 = 7) -> [DailyMetric] {
         var rng = RNG(s: seed)
         func r(_ a: Double, _ b: Double) -> Double { Double.random(in: a...b, using: &rng) }
         let cal = Calendar.current
         var out: [DailyMetric] = []
-        var journal: [JournalEntry] = []
         var prevEffort = 40.0
         for i in stride(from: n - 1, through: 0, by: -1) {
             let d = cal.date(byAdding: .day, value: -i, to: now)!
@@ -51,14 +50,8 @@ enum DemoData {
             m.workouts = effort > 60 ? 1 : 0
             prevEffort = effort
             out.append(m)
-            var tags: [String] = []
-            if drinking { tags.append("Alcohol") }
-            if lateWorkout { tags.append("Late workout") }
-            if Int(r(0, 100)) < 30 { tags.append("Caffeine after 2pm") }
-            if Int(r(0, 100)) < 40 { tags.append("Meditation") }
-            if !tags.isEmpty { journal.append(JournalEntry(day: key, tags: tags, mood: Int(r(2, 5)), caffeineMg: Int(r(0, 300)))) }
         }
-        return (out, journal)
+        return out
     }
 
     /// ~31 h of synthetic raw samples ending now (20:00 yesterday → now), profiled by local clock hour:

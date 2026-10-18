@@ -34,15 +34,6 @@ enum DayFormat {
     static func parse(_ s: String) -> Date? { f.date(from: s) }
 }
 
-struct JournalEntry: Codable, Identifiable, Equatable {
-    var id = UUID()
-    var day: String
-    var tags: [String]
-    var mood: Int?           // 1…5
-    var caffeineMg: Int?
-    var note: String = ""
-}
-
 struct HydrationLog: Codable, Identifiable, Equatable {
     var id = UUID()
     var time: Double
@@ -79,7 +70,19 @@ struct AppSettings: Codable, Equatable {
     var useDemoData = true
 }
 
+struct Lap: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var start: Double
+    var end: Double
+    var avgHR: Double
+    var peakHR: Double
+    var restHR: Double?        // HR ~60 s after a strength set
+}
+
 struct SavedWorkout: Codable, Identifiable, Equatable {
+    var laps: [Lap]? = nil
+    var zoneSeconds: [Int: Double]? = nil
+    var hrSeries: [Double]? = nil      // one reading per 5 s
     var id = UUID()
     var sport: String
     var start: Double
@@ -105,10 +108,47 @@ struct LiftWorkoutLog: Codable, Identifiable, Equatable {
 struct Snapshot: Codable {
     var settings = AppSettings()
     var days: [DailyMetric] = []
-    var journal: [JournalEntry] = []
+    var ui: UISettings?
     var hydration: [HydrationLog] = []
     var workouts: [SavedWorkout] = []
     var lifts: [LiftWorkoutLog] = []
     var liveHR: [HRSample] = []
     var periodStarts: [String] = []
+}
+
+enum TodayCard: String, CaseIterable, Codable, Identifiable {
+    case workoutSuggestion, scores, drivers, live, forecast, stress, hydration, readiness, illness
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .workoutSuggestion: return "Workout suggestion"
+        case .scores: return "Charge · Effort · Rest"
+        case .drivers: return "Charge drivers"
+        case .live: return "Live heart rate"
+        case .forecast: return "Tomorrow's Charge"
+        case .stress: return "Stress today"
+        case .hydration: return "Hydration"
+        case .readiness: return "Readiness signals"
+        case .illness: return "Illness heads-up"
+        }
+    }
+}
+
+enum AppTab: String, CaseIterable, Codable, Identifiable {
+    case sleep, trends, workouts, breathe
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
+enum DriverDisplay: String, CaseIterable, Codable, Identifiable {
+    case both = "Value + change", value = "Real value", change = "Change only"
+    var id: String { rawValue }
+}
+
+/// Personalisation. Stored as an optional on Snapshot so older saves still decode.
+struct UISettings: Codable, Equatable {
+    var hiddenCards: Set<String> = []
+    var hiddenTabs: Set<String> = []
+    var hiddenMore: Set<String> = []
+    var driverDisplay: DriverDisplay = .both
 }

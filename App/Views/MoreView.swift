@@ -6,26 +6,28 @@ import WhoopProtocol
 
 struct MoreView: View {
     @Environment(AppModel.self) private var model
+    private func on(_ k: String) -> Bool { !model.ui.hiddenMore.contains(k) }
 
     var body: some View {
         NavigationStack {
             List {
                 Section("Long-term") {
-                    NavigationLink("Vitality & Fitness Age") { LongevityView() }
-                    NavigationLink("Body clock & jet lag") { CircadianView() }
-                    NavigationLink("Cycle awareness") { CycleView() }
-                    NavigationLink("Illness watch") { IllnessView() }
+                    if on("vitality") { NavigationLink("Vitality & Fitness Age") { LongevityView() } }
+                    if on("circadian") { NavigationLink("Body clock & jet lag") { CircadianView() } }
+                    if on("cycle") { NavigationLink("Cycle awareness") { CycleView() } }
+                    if on("illness") { NavigationLink("Illness watch") { IllnessView() } }
                 }
                 Section("Strap") {
-                    NavigationLink("Alarms & wind-down") { AlarmView() }
+                    if on("alarms") { NavigationLink("Alarms & wind-down") { AlarmView() } }
                     NavigationLink("Device & sync") { DeviceView() }
                 }
                 Section("Data") {
-                    NavigationLink("Combining sources") { FusionView() }
+                    if on("fusion") { NavigationLink("Combining sources") { FusionView() } }
                     NavigationLink("Backup & restore") { BackupView() }
-                    NavigationLink("Test Centre") { TestCentreView() }
+                    if on("testcentre") { NavigationLink("Test Centre") { TestCentreView() } }
                 }
                 Section("Settings") {
+                    NavigationLink("Personalize") { PersonalizeView() }
                     NavigationLink("Profile & preferences") { SettingsView() }
                     NavigationLink("Notifications") { NotificationsView() }
                     NavigationLink("About & honesty rules") { AboutView() }
@@ -283,7 +285,7 @@ struct BackupView: View {
                 Button("Reset to fresh demo data", role: .destructive) { model.resetDemo() }
                 if let message { Text(message).font(.footnote) }
             } footer: {
-                Text("Backups are plain JSON and carry settings, scores, journal and workouts — never device identifiers. Point the Files share at iCloud Drive and its client does the upload.")
+                Text("Backups are plain JSON and carry settings, scores and workouts — never device identifiers. Point the Files share at iCloud Drive and its client does the upload.")
             }
         }
         .navigationTitle("Backup")
@@ -390,5 +392,48 @@ struct AboutView: View {
                 Text("Oura / Polar / Xiaomi sources, Apple Health import & write-back, WHOOP history offload decoding beyond the frame layer, 5/MG record versions 20/21/26, ECG, and the AI coach.")
             }
         }.navigationTitle("About")
+    }
+}
+
+struct PersonalizeView: View {
+    @Environment(AppModel.self) private var model
+
+    static let moreItems: [(key: String, title: String)] = [
+        ("vitality", "Vitality & Fitness Age"), ("circadian", "Body clock & jet lag"), ("cycle", "Cycle awareness"),
+        ("illness", "Illness watch"), ("alarms", "Alarms & wind-down"), ("fusion", "Combining sources"), ("testcentre", "Test Centre"),
+    ]
+
+    private func toggle(_ keyPath: WritableKeyPath<UISettings, Set<String>>, _ key: String, title: String) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { !model.ui[keyPath: keyPath].contains(key) },
+            set: { on in
+                var ui = model.ui
+                if on { ui[keyPath: keyPath].remove(key) } else { ui[keyPath: keyPath].insert(key) }
+                model.ui = ui
+            }))
+    }
+
+    var body: some View {
+        Form {
+            Section("Tabs") {
+                ForEach(AppTab.allCases) { toggle(\.hiddenTabs, $0.rawValue, title: $0.title) }
+                Text("Today and More are always shown.").font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Today page cards") {
+                ForEach(TodayCard.allCases) { toggle(\.hiddenCards, $0.rawValue, title: $0.title) }
+            }
+            Section("Charge drivers") {
+                Picker("Show", selection: Binding(get: { model.ui.driverDisplay }, set: { var u = model.ui; u.driverDisplay = $0; model.ui = u })) {
+                    ForEach(DriverDisplay.allCases) { Text($0.rawValue).tag($0) }
+                }
+            }
+            Section("More menu") {
+                ForEach(Self.moreItems, id: \.key) { toggle(\.hiddenMore, $0.key, title: $0.title) }
+            }
+            Section {
+                Button("Reset to defaults", role: .destructive) { model.ui = UISettings() }
+            }
+        }
+        .navigationTitle("Personalize")
     }
 }

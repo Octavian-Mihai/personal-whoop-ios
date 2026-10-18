@@ -102,11 +102,11 @@ public enum StrainScorer {
     }
 
     /// Score from timestamped HR. Each reading credited with time to next, capped at 2 min.
-    public static func score(hr: [HRSample], restingHR: Double, hrMax: Double, method: TRIMPMethod = .edwards) -> Double? {
+    public static func score(hr: [HRSample], restingHR: Double, hrMax: Double, method: TRIMPMethod = .edwards, requireGates: Bool = true) -> Double? {
         let s = hr.sorted { $0.t < $1.t }
         let dense = s.count >= 600
         let sparse = s.count >= 20 && ((s.last?.t ?? 0) - (s.first?.t ?? 0)) >= 600
-        guard dense || sparse, hrMax > restingHR else { return nil }
+        guard (dense || sparse || (!requireGates && s.count >= 2)), hrMax > restingHR else { return nil }
         let hrr = hrMax - restingHR
         var trimp = 0.0
         for i in 0..<s.count {

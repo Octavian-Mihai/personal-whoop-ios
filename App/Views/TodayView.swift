@@ -4,28 +4,33 @@ import StrandAnalytics
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
-    @State private var showJournal = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
-                    if let ill = model.illness, ill.level == .raised { illnessBanner(ill) }
-                    if let s = model.autoSuggestion { workoutSuggestion(s) }
-                    scoreCard
-                    if let r = model.chargeResult { driversCard(r) }
-                    liveCard
-                    if let f = model.forecast { forecastCard(f) }
-                    stressCard
-                    hydrationCard
-                    if !model.readiness.isEmpty { readinessCard }
+                    ForEach(TodayCard.allCases.filter { !model.ui.hiddenCards.contains($0.rawValue) }) { card in
+                        cardView(card)
+                    }
                     Disclaimer()
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
             .navigationTitle("Today")
-            .toolbar { Button { showJournal = true } label: { Image(systemName: "square.and.pencil") } }
-            .sheet(isPresented: $showJournal) { JournalSheet() }
+        }
+    }
+
+    @ViewBuilder private func cardView(_ c: TodayCard) -> some View {
+        switch c {
+        case .illness: if let ill = model.illness, ill.level == .raised { illnessBanner(ill) }
+        case .workoutSuggestion: if let s = model.autoSuggestion { workoutSuggestion(s) }
+        case .scores: scoreCard
+        case .drivers: if let r = model.chargeResult { driversCard(r) }
+        case .live: liveCard
+        case .forecast: if let f = model.forecast { forecastCard(f) }
+        case .stress: stressCard
+        case .hydration: hydrationCard
+        case .readiness: if !model.readiness.isEmpty { readinessCard }
         }
     }
 
@@ -70,14 +75,39 @@ struct TodayView: View {
         }
     }
 
+    /// Real value for a driver: (today's reading, your baseline), formatted.
+    private func driverValue(_ name: String) -> (value: String, baseline: String?)? {
+        let t = model.today, b = model.baselines
+        switch name {
+        case "HRV": return t?.hrv.map { (String(format: "%.0f ms", $0), b.map { String(format: "norm %.0f", $0.hrv.center) }) }
+        case "Resting HR": return t?.restingHR.map { (String(format: "%.0f bpm", $0), b.map { String(format: "norm %.0f", $0.restingHR.center) }) }
+        case "Respiration": return t?.respiration.map { (String(format: "%.1f /min", $0), b.map { String(format: "norm %.1f", $0.respiration.center) }) }
+        case "Rest quality": return t?.rest.map { (String(format: "%.0f%%", $0), nil) }
+        case "Skin temp": return t?.skinTempDev.map { (String(format: "%+.2f °C", $0), "vs baseline") }
+        case "Activity balance":
+            let i = model.days.count - 2
+            return i >= 0 ? model.days[i].effort.map { (String(format: "Effort %.0f", $0), nil) } : nil
+        default: return nil
+        }
+    }
+
     private func driversCard(_ r: ChargeResult) -> some View {
-        Card(title: "Charge drivers", subtitle: "Points each input added or removed") {
+        let mode = model.ui.driverDisplay
+        return Card(title: "Charge drivers", subtitle: mode == .change ? "Points each input added or removed" : "Today's value and what it did to Charge") {
             ForEach(r.drivers) { d in
-                HStack {
-                    Text(d.name).font(.subheadline)
+                let dv = driverValue(d.name)
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(d.name).font(.subheadline)
+                        if mode != .change, let b = dv?.baseline { Text(b).font(.caption2).foregroundStyle(.secondary) }
+                    }
                     Spacer()
-                    Text(String(format: "%+.1f", d.points)).font(.subheadline.monospacedDigit())
-                        .foregroundStyle(d.points >= 0 ? .green : .red)
+                    if mode != .change, let v = dv?.value { Text(v).font(.subheadline.weight(.semibold).monospacedDigit()) }
+                    if mode != .value {
+                        Text(String(format: "%+.1f", d.points)).font(.subheadline.monospacedDigit())
+                            .foregroundStyle(d.points >= 0 ? .green : .red)
+                            .frame(minWidth: 48, alignment: .trailing)
+                    }
                 }
             }
         }
@@ -149,36 +179,4 @@ struct TodayView: View {
     }
 
     private func color(_ f: SignalFlag) -> Color { f == .good ? .green : f == .neutral ? .gray : f == .watch ? .orange : .red }
-}
-
-struct JournalSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var tags: Set<String> = []
-    @State private var mood = 3
-    @State private var caffeine = 0.0
-    let all = ["Alcohol", "Late workout", "Caffeine after 2pm", "Meditation", "Sauna", "Stress", "Travel", "Sick"]
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Today") {
-                    ForEach(all, id: \.self) { t in
-                        Toggle(t, isOn: Binding(get: { tags.contains(t) }, set: { if $0 { tags.insert(t) } else { tags.remove(t) } }))
-                    }
-                }
-                Section("Mood") { Picker("Mood", selection: $mood) { ForEach(1...5, id: \.self) { Text("\($0)").tag($0) } }.pickerStyle(.segmented) }
-                Section("Caffeine") { Slider(value: $caffeine, in: 0...600, step: 25); Text("\(Int(caffeine)) mg") }
-            }
-            .navigationTitle("Journal")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        model.addJournal(JournalEntry(day: DayFormat.string(Date()), tags: Array(tags), mood: mood, caffeineMg: Int(caffeine)))
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
 }
