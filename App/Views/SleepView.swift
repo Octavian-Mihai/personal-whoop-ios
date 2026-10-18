@@ -6,12 +6,25 @@ import StrandAnalytics
 struct SleepView: View {
     @Environment(AppModel.self) private var model
 
+    /// Evening and small hours open on "Tonight" (marks + alarm); the rest of the day opens on last night's data.
+    @State private var tonight: Bool = { let h = Calendar.current.component(.hour, from: Date()); return h >= 19 || h < 4 }()
+
     var content: some View {
             VStack(spacing: 14) {
-                if let n = model.lastNight { hypnogram(n); marksCard; alarmCard; metrics(n) }
-                else { marksCard; alarmCard; Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
-                needDebt
-                stageTrend
+                Picker("", selection: $tonight) {
+                    Text("Last night").tag(false)
+                    Text("Tonight").tag(true)
+                }.pickerStyle(.segmented)
+
+                if tonight {
+                    marksCard
+                    alarmCard
+                } else {
+                    if let n = model.lastNight { hypnogram(n); metrics(n) }
+                    else { Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
+                    needDebt
+                    stageTrend
+                }
                 Disclaimer()
             }
             .padding(.horizontal, 16).padding(.bottom, 24)
@@ -36,24 +49,24 @@ struct SleepView: View {
         let m = model.markedNight
         let asleep = model.isMarkedAsleep
         func t(_ x: Double) -> String { Date(timeIntervalSince1970: x).formatted(date: .omitted, time: .shortened) }
-        return Card(title: "Sleep marks", subtitle: "Tell the app when you sleep — it anchors detection", icon: "moon.zzz.fill") {
-            HStack(spacing: 10) {
+        return Card {
+            HStack(spacing: 8) {
                 Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); withAnimation { model.markBed() } } label: {
-                    Label("Going to bed", systemImage: "bed.double.fill").frame(maxWidth: .infinity)
-                }.buttonStyle(.borderedProminent).tint(Palette.lavenderRich[1]).disabled(asleep)
+                    Label("Going to bed", systemImage: "bed.double.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).tint(Palette.lavenderRich[1]).controlSize(.small).disabled(asleep)
                 Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); withAnimation { model.markWake() } } label: {
-                    Label("I woke up", systemImage: "sun.max.fill").frame(maxWidth: .infinity)
-                }.buttonStyle(.borderedProminent).tint(Palette.butterRich[1])
+                    Label("I woke up", systemImage: "sun.max.fill").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).tint(Palette.butterRich[1]).controlSize(.small)
             }
-            HStack {
+            HStack(spacing: 6) {
                 Group {
                     if asleep, let b = m.bed { Label("Sleeping since \(t(b))", systemImage: "zzz") }
                     else if let b = m.bed, let w = m.wake { Label("Bed \(t(b)) · up \(t(w)) · \(fmtDuration((w - b) / 60))", systemImage: "checkmark.circle") }
                     else if let w = m.wake { Label("Woke up \(t(w))", systemImage: "checkmark.circle") }
-                    else { Label("Nothing marked yet", systemImage: "circle.dashed") }
-                }.font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                if !(model.snapshot.sleepMarks ?? []).isEmpty { Button("Undo") { model.undoLastMark() }.font(.caption.weight(.semibold)) }
+                    else { Label("Mark when you sleep and wake to sharpen detection", systemImage: "moon.zzz") }
+                }.font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.85)
+                Spacer(minLength: 4)
+                if !(model.snapshot.sleepMarks ?? []).isEmpty { Button("Undo") { model.undoLastMark() }.font(.caption2.weight(.semibold)) }
             }
         }
     }
