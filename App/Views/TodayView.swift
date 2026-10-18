@@ -27,7 +27,7 @@ struct TodayView: View {
     private var regular: some View {
         NavigationStack {
             ScrollView { content }
-            .background { AmbientBackground(tint: (model.today?.charge.map(ChargeBand.of) ?? .yellow).gradient[0]) }
+            .background { AmbientBackground(tint: Palette.mintRich[0]) }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $detail) { MetricDetailView(kind: $0).environment(model) }
         }
@@ -101,7 +101,7 @@ struct TodayView: View {
         let effort = t?.effort
         let b = model.baselines
         return VStack(spacing: 12) {
-            HeroCard(colors: (band ?? .yellow).gradient) {
+            HeroCard(colors: Palette.mintRich) {
                 HStack(spacing: 12) {
                     Ring(value: t?.charge, colors: [.white.opacity(0.85), .white], label: "Charge", unit: "%", size: 128, onDark: true, textColor: .white)
                         .onTapGesture { detail = .charge }
@@ -111,13 +111,13 @@ struct TodayView: View {
                             Text("· \(b?.hrv.count ?? 0) nights").font(.caption).foregroundStyle(.white.opacity(0.8))
                         }
                         VitalRow(icon: "waveform.path.ecg", label: "HRV", value: t?.hrv.map { String(format: "%.0f ms", $0) } ?? "—",
-                                 delta: t?.hrv.flatMap { v in b.map { v - $0.hrv.center } }, onDark: true, tint: .white)
+                                 delta: t?.hrv.flatMap { v in b.map { v - $0.hrv.center } }, onDark: true, chip: true, tint: Color(red: 0.12, green: 0.58, blue: 0.62))
                             .onTapGesture { detail = .hrv }
                         VitalRow(icon: "heart.fill", label: "Resting HR", value: t?.restingHR.map { String(format: "%.0f bpm", $0) } ?? "—",
-                                 delta: t?.restingHR.flatMap { v in b.map { v - $0.restingHR.center } }, higherIsBetter: false, onDark: true, tint: .white)
+                                 delta: t?.restingHR.flatMap { v in b.map { v - $0.restingHR.center } }, higherIsBetter: false, onDark: true, chip: true, tint: Color(red: 0.84, green: 0.30, blue: 0.42))
                             .onTapGesture { detail = .restingHR }
                         VitalRow(icon: "lungs.fill", label: "Respiration", value: t?.respiration.map { String(format: "%.1f /min", $0) } ?? "—",
-                                 delta: t?.respiration.flatMap { v in b.map { v - $0.respiration.center } }, deltaFormat: "%+.1f", higherIsBetter: false, onDark: true, tint: .white)
+                                 delta: t?.respiration.flatMap { v in b.map { v - $0.respiration.center } }, deltaFormat: "%+.1f", higherIsBetter: false, onDark: true, chip: true, tint: Color(red: 0.25, green: 0.45, blue: 0.88))
                             .onTapGesture { detail = .respiration }
                     }
                 }

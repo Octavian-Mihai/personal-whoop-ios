@@ -279,26 +279,29 @@ struct VitalRow: View {
     var deltaFormat: String = "%+.0f"
     var higherIsBetter = true
     var onDark = false
+    /// Filled white chip with the metric's own colour (used on top of the green Charge card).
+    var chip = false
     var tint: Color
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).font(.caption).foregroundStyle(tint).frame(width: 16)
+            Image(systemName: icon).font(.caption).foregroundStyle(chip ? tint : tint).frame(width: 16)
             VStack(alignment: .leading, spacing: 0) {
-                Text(label).font(.caption2).foregroundStyle(onDark ? Color.white.opacity(0.8) : .secondary)
-                Text(value).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(onDark ? Color.white : Color.primary)
+                Text(label).font(.caption2).foregroundStyle(chip ? tint.opacity(0.85) : (onDark ? Color.white.opacity(0.8) : .secondary))
+                Text(value).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(chip ? Palette.ink : (onDark ? Color.white : Color.primary))
             }
             Spacer(minLength: 2)
             if let d = delta, abs(d) > 0.0001 {
                 let good = (d > 0) == higherIsBetter
                 Label(String(format: deltaFormat, d), systemImage: d > 0 ? "arrow.up.right" : "arrow.down.right")
                     .font(.caption2.weight(.bold).monospacedDigit())
-                    .foregroundStyle(onDark ? Color.white : (good ? Palette.sage : Palette.clay))
+                    .foregroundStyle(chip ? (good ? Palette.sage : Palette.clay) : (onDark ? Color.white : (good ? Palette.sage : Palette.clay)))
             }
         }
+        .padding(.horizontal, chip ? 10 : 0).padding(.vertical, chip ? 5 : 0)
+        .background { if chip { RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.92)) } }
         .contentShape(Rectangle())
     }
 }
-
 /// Strap battery at a glance. Shows the live value when connected, otherwise the last reading with its age.
 struct BatteryPill: View {
     var percent: Double?
