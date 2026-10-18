@@ -86,6 +86,41 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(WindDownNudge.minuteOfDay(wakeMinute: 6 * 60).minute, 21 * 60 + 30)
     }
 
+    /// Builds a 4.0 type-47 frame whose fields sit at the documented absolute offsets.
+    private func v24Frame(unix: UInt32, hr: UInt8, rr: [UInt16], g: (Float, Float, Float)?, wrist: Bool) -> [UInt8] {
+        var abs = [UInt8](repeating: 0, count: 90)           // pretend absolute frame: index = absolute offset
+        for i in 0..<4 { abs[11 + i] = UInt8((unix >> (8 * UInt32(i))) & 0xFF) }
+        abs[21] = hr; abs[22] = UInt8(rr.count)
+        for (i, v) in rr.enumerated() { abs[23 + 2 * i] = UInt8(v & 0xFF); abs[24 + 2 * i] = UInt8(v >> 8) }
+        if let g { for (k, f) in [g.0, g.1, g.2].enumerated() { let b = f.bitPattern; for i in 0..<4 { abs[40 + 4 * k + i] = UInt8((b >> (8 * UInt32(i))) & 0xFF) } } }
+        abs[55] = wrist ? 1 : 0
+        // inner = abs[4...]; type 47, seq (= version) 24, then the rest
+        var inner = Array(abs[4...]); inner[0] = 47; inner[1] = 24
+        return FrameCodec.build(family: .whoop4, type: .historical, seq: 24, command: inner[2], payload: Array(inner[3...]))
+    }
+
+    func testHistoryRecordDecodeAndChunkAck() {
+        let bytes = v24Frame(unix: 1_790_000_000, hr: 61, rr: [980, 1010], g: (0.1, -0.2, 0.97), wrist: true)
+        guard case .success(let f) = FrameCodec.verify(bytes, family: .whoop4) else { return XCTFail("frame should verify") }
+        guard case .record(let s)? = HistoryProtocol.parse(f, now: 1_790_001_000) else { return XCTFail("should decode as a record") }
+        XCTAssertEqual(s.unix, 1_790_000_000); XCTAssertEqual(s.heartRate, 61); XCTAssertEqual(s.rr, [980, 1010]); XCTAssertEqual(s.onWrist, true)
+        XCTAssertEqual(s.gravity?.2 ?? 0, 0.97, accuracy: 0.0001)
+        // a record dated far in the future is rejected, never trusted
+        let future = v24Frame(unix: 1_800_000_000, hr: 61, rr: [], g: nil, wrist: true)
+        guard case .success(let ff) = FrameCodec.verify(future, family: .whoop4) else { return XCTFail() }
+        XCTAssertNil(HistoryProtocol.parse(ff, now: 1_790_001_000))
+
+        // chunk end: meta type 2 at inner[2], end_data at inner[13..<21], echoed back verbatim with a leading 0x01
+        var inner = [UInt8](repeating: 0, count: 24); inner[0] = 49; inner[2] = 2
+        let end: [UInt8] = [9, 0, 0, 0, 1, 2, 3, 4]
+        for (i, b) in end.enumerated() { inner[13 + i] = b }
+        let endBytes = FrameCodec.build(family: .whoop4, type: .metadata, seq: 7, command: 2, payload: Array(inner[3...]))
+        guard case .success(let ef) = FrameCodec.verify(endBytes, family: .whoop4) else { return XCTFail() }
+        guard case .chunkEnd(let ed, let cursor)? = HistoryProtocol.parse(ef, now: 1_790_001_000) else { return XCTFail("should be a chunk end") }
+        XCTAssertEqual(ed, end); XCTAssertEqual(cursor, 9)
+        XCTAssertEqual(HistoryProtocol.ackPayload(endData: ed), [0x01] + end)
+    }
+
     func testSleepMarksRefineDetection() {
         let data = 0.0...100_000
         let detected = [(start: 3_600.0, end: 30_000.0)]

@@ -64,6 +64,7 @@ struct TodayView: View {
         case .illness: if let ill = model.illness, ill.level == .raised { illnessBanner(ill) }
         case .workoutSuggestion: if let s = model.autoSuggestion { workoutSuggestion(s) }
         case .scores:
+            if model.history.isActive { syncBanner }
             if !model.settings.useDemoData && model.today?.charge == nil { waitingCard }
             scoreCard
         case .drivers: if let r = model.chargeResult { driversCard(r) }
@@ -72,6 +73,21 @@ struct TodayView: View {
         case .stress: stressCard
         case .hydration: hydrationCard
         case .readiness: if !model.readiness.isEmpty { readinessCard }
+        }
+    }
+
+    private var syncBanner: some View {
+        let h = model.history
+        return Card {
+            HStack(spacing: 10) {
+                ProgressView()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Syncing your strap").font(.subheadline.weight(.semibold))
+                    Text(h.recordsDecoded == 0 ? "Asking for what it recorded…" : "\(h.recordsDecoded.formatted()) records · \(h.chunks) chunks saved").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Stop") { h.cancel() }.font(.caption.weight(.semibold))
+            }
         }
     }
 

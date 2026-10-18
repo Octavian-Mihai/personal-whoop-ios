@@ -66,6 +66,9 @@ public enum FrameReject: Error, Equatable {
 public struct Frame: Equatable, Sendable {
     public var family: WhoopFamily
     public var inner: [UInt8]
+    /// The whole verified frame (absolute offsets in the protocol notes refer to this).
+    public var raw: [UInt8] = []
+    public init(family: WhoopFamily, inner: [UInt8], raw: [UInt8] = []) { self.family = family; self.inner = inner; self.raw = raw }
     public var type: UInt8 { inner.first ?? 0 }
     public var seq: UInt8 { inner.count > 1 ? inner[1] : 0 }
     public var command: UInt8 { inner.count > 2 ? inner[2] : 0 }
@@ -107,7 +110,7 @@ public enum FrameCodec {
             let inner = Array(bytes[4..<(bytes.count - 4)])
             let crc = UInt32(bytes[bytes.count - 4]) | UInt32(bytes[bytes.count - 3]) << 8 | UInt32(bytes[bytes.count - 2]) << 16 | UInt32(bytes[bytes.count - 1]) << 24
             guard Checksum.crc32(inner) == crc else { return .failure(.payloadCRCMismatch) }
-            return .success(Frame(family: family, inner: inner))
+            return .success(Frame(family: family, inner: inner, raw: bytes))
         case .whoop5:
             guard bytes.count >= 13 else { return .failure(.belowMinimumLength) }
             let decl = Int(bytes[2]) | Int(bytes[3]) << 8
@@ -117,7 +120,7 @@ public enum FrameCodec {
             let inner = Array(bytes[8..<(bytes.count - 4)])
             let crc = UInt32(bytes[bytes.count - 4]) | UInt32(bytes[bytes.count - 3]) << 8 | UInt32(bytes[bytes.count - 2]) << 16 | UInt32(bytes[bytes.count - 1]) << 24
             guard Checksum.crc32(inner) == crc else { return .failure(.payloadCRCMismatch) }
-            return .success(Frame(family: family, inner: inner))
+            return .success(Frame(family: family, inner: inner, raw: bytes))
         }
     }
 }
@@ -189,24 +192,31 @@ public enum WhoopDecoder {
     static func f32(_ f: [UInt8], _ o: Int) -> Float? { u32(f, o).map { Float(bitPattern: $0) } }
 
     /// Decode a type-47 record from a verified frame's *raw bytes* (offsets are absolute frame offsets).
+    /// 4.0: version = seq byte (frame[5]); 5/MG: version at frame[9] and only v18 has a field map — other versions return nil (archive, never guess).
     public static func historical(raw: [UInt8], family: WhoopFamily, now: UInt32) -> HistoricalSample? {
         switch family {
         case .whoop4:
-            guard raw.count > 56, let t = u32(raw, 11), t >= minUnix, t <= now + 86400 else { return nil }
+            guard raw.count > 25, let t = u32(raw, 11), t >= minUnix, t <= now &+ 86400 else { return nil }
+            let version = raw[5]
             let hr = raw[21]
+            guard (25...230).contains(Int(hr)) || hr == 0 else { return nil }
             let n = min(Int(raw[22]), 4)
             var rr: [UInt16] = []
-            for i in 0..<n { if let v = u16(raw, 23 + 2 * i), v > 0 { rr.append(v) } }
+            for i in 0..<n { if let v = u16(raw, 23 + 2 * i), v >= 250, v <= 2500 { rr.append(v) } }
             var g: (Float, Float, Float)?
-            if let x = f32(raw, 40), let y = f32(raw, 44), let z = f32(raw, 48), x.isFinite, y.isFinite, z.isFinite { g = (x, y, z) }
-            return HistoricalSample(unix: t, heartRate: hr, rr: rr, gravity: g, onWrist: raw[55] != 0)
+            var wrist: Bool?
+            if raw.count > 56, version == 24 || version == 12 {
+                if let x = f32(raw, 40), let y = f32(raw, 44), let z = f32(raw, 48), x.isFinite, y.isFinite, z.isFinite, abs(x) < 20, abs(y) < 20, abs(z) < 20 { g = (x, y, z) }
+                wrist = raw[55] != 0
+            }
+            return HistoricalSample(unix: t, heartRate: hr, rr: rr, gravity: g, onWrist: wrist)
         case .whoop5:
-            guard raw.count > 58, let t = u32(raw, 15), t >= minUnix, t <= now + 86400 else { return nil }
+            guard raw.count > 58, raw[9] == 18, let t = u32(raw, 15), t >= minUnix, t <= now &+ 86400 else { return nil }
             let n = min(Int(raw[23]), 4)
             var rr: [UInt16] = []
-            for i in 0..<n { if let v = u16(raw, 24 + 2 * i), v > 0 { rr.append(v) } }   // 5/MG R-R words are already ms
+            for i in 0..<n { if let v = u16(raw, 24 + 2 * i), v >= 250, v <= 2500 { rr.append(v) } }   // 5/MG R-R words are already ms
             var g: (Float, Float, Float)?
-            if let x = f32(raw, 45), let y = f32(raw, 49), let z = f32(raw, 53), x.isFinite, y.isFinite, z.isFinite { g = (x, y, z) }
+            if let x = f32(raw, 45), let y = f32(raw, 49), let z = f32(raw, 53), x.isFinite, y.isFinite, z.isFinite, abs(x) < 20, abs(y) < 20, abs(z) < 20 { g = (x, y, z) }
             return HistoricalSample(unix: t, heartRate: raw[22], rr: rr, gravity: g, onWrist: nil)
         }
     }
@@ -226,4 +236,39 @@ public enum WhoopDecoder {
 
     /// Battery reply: percent = u16 / 10.
     public static func batteryPercent(u16Value: UInt16) -> Double { Double(u16Value) / 10 }
+}
+
+/// What a frame means in the history offload (spec §14.8 / §14.10).
+public enum HistoryEvent: Equatable {
+    case started
+    case record(HistoricalSample)
+    /// End of a chunk. `endData` is the 8-byte block the strap wants echoed back to free the chunk.
+    case chunkEnd(endData: [UInt8], trimCursor: UInt32)
+    case complete
+}
+
+public enum HistoryProtocol {
+    /// METADATA meta types: 1 start, 2 end of chunk, 3 complete. Absolute frame offset 6 = `inner[2]` in both families.
+    public static func parse(_ f: Frame, now: UInt32) -> HistoryEvent? {
+        switch f.type {
+        case PacketType.metadata.rawValue:
+            switch f.inner.count > 2 ? f.inner[2] : 0 {
+            case 1: return .started
+            case 2:
+                // end_data = frame[17..<25) on a 4.0, frame[21..<29) on a 5/MG → inner[13..<21] in both
+                guard f.inner.count >= 21 else { return nil }
+                let end = Array(f.inner[13..<21])
+                let cursor = UInt32(end[0]) | UInt32(end[1]) << 8 | UInt32(end[2]) << 16 | UInt32(end[3]) << 24
+                return .chunkEnd(endData: end, trimCursor: cursor)
+            case 3: return .complete
+            default: return nil
+            }
+        case PacketType.historical.rawValue:
+            return WhoopDecoder.historical(raw: f.raw, family: f.family, now: now).map { .record($0) }
+        default: return nil
+        }
+    }
+
+    /// The acknowledgement that lets the strap free a chunk: command 23, payload `[0x01] + end_data`, sent as an acknowledged write.
+    public static func ackPayload(endData: [UInt8]) -> [UInt8] { WhoopPayload.historyAck(endData: endData) }
 }

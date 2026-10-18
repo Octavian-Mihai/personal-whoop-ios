@@ -23,6 +23,8 @@ final class BLEManager: NSObject {
     var wristOn: Bool?
     var onHR: ((Int, [Double]) -> Void)?
     var onBattery: ((Double) -> Void)?
+    var onHistoryFrame: ((Frame) -> Void)?
+    var onReady: (() -> Void)?
     var hrWindow: [(t: Double, bpm: Double)] = []
 
     private var central: CBCentralManager!
@@ -181,6 +183,8 @@ extension BLEManager: CBCentralManagerDelegate, CBPeripheralDelegate {
             state = .connected
             deviceName = p.name
             startKeepAlive()
+            if family == .whoop4 { syncClock() }   // timestamps in history must line up with wall time
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.onReady?() }
         }
     }
 
@@ -203,6 +207,8 @@ extension BLEManager: CBCentralManagerDelegate, CBPeripheralDelegate {
 
     @MainActor private func handle(_ f: Frame) {
         switch f.type {
+        case PacketType.historical.rawValue, PacketType.metadata.rawValue:
+            onHistoryFrame?(f)
         case PacketType.commandResponse.rawValue:
             if f.command == WhoopCommand.getBatteryLevel.rawValue, f.payload.count >= 3 {
                 // result byte at payload[?]; battery u16 follows. Logged, never trusted blindly.

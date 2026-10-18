@@ -150,8 +150,16 @@ enum DriverDisplay: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
+enum AppearanceMode: String, CaseIterable, Codable, Identifiable {
+    case system = "Automatic", light = "Light", dark = "Dark", schedule = "By time of day"
+    var id: String { rawValue }
+}
+
 /// Personalisation. Stored as an optional on Snapshot so older saves still decode.
 struct UISettings: Codable, Equatable {
+    var appearance: AppearanceMode? = nil          // nil = Automatic (follow iPhone)
+    var lightFromMinute: Int? = nil                // "By time of day": light from this minute…
+    var lightToMinute: Int? = nil                  // …until this one, dark otherwise (defaults 07:00–20:00)
     var hiddenCards: Set<String> = []
     var hiddenTabs: Set<String> = []
     var hiddenMore: Set<String> = []

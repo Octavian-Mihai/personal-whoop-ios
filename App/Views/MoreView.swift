@@ -220,6 +220,11 @@ struct DeviceView: View {
                 LabeledContent("Frames decoded", value: "\(model.ble.lastFrameCount)")
                 Button(model.ble.state == .connected ? "Disconnect" : "Connect") { model.ble.state == .connected ? model.ble.disconnect() : model.ble.connect() }
             }
+            Section {
+                HistorySyncRows()
+            } header: { Text("History sync") } footer: {
+                Text("Downloads what the strap recorded while it was away. Each chunk is saved on your phone before the strap is told it can free it, so stopping or losing the connection never loses data.")
+            }
             Section("Commands (reversible only)") {
                 Button("Buzz strap") { model.ble.buzz(loops: 2) }
                 Button("Sync strap clock") { model.ble.syncClock() }
@@ -443,8 +448,29 @@ struct PersonalizeView: View {
             }))
     }
 
+    private func minuteBinding(_ kp: WritableKeyPath<UISettings, Int?>, default def: Int) -> Binding<Date> {
+        Binding(get: {
+            let m = model.ui[keyPath: kp] ?? def
+            return Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: Date())!
+        }, set: {
+            let c = Calendar.current.dateComponents([.hour, .minute], from: $0)
+            var u = model.ui; u[keyPath: kp] = (c.hour ?? 0) * 60 + (c.minute ?? 0); model.ui = u
+        })
+    }
+
     var body: some View {
         Form {
+            Section {
+                Picker("Appearance", selection: Binding(get: { model.ui.appearance ?? .system }, set: { var u = model.ui; u.appearance = $0; model.ui = u })) {
+                    ForEach(AppearanceMode.allCases) { Text($0.rawValue).tag($0) }
+                }
+                if (model.ui.appearance ?? .system) == .schedule {
+                    DatePicker("Light from", selection: minuteBinding(\.lightFromMinute, default: 7 * 60), displayedComponents: .hourAndMinute)
+                    DatePicker("Dark from", selection: minuteBinding(\.lightToMinute, default: 20 * 60), displayedComponents: .hourAndMinute)
+                }
+            } header: { Text("Appearance") } footer: {
+                Text("Automatic follows your iPhone's light/dark setting. \"By time of day\" uses light mode between the two times and dark mode outside them.")
+            }
             Section("Tabs") {
                 ForEach(AppTab.allCases) { toggle(\.hiddenTabs, $0.rawValue, title: $0.title) }
                 Text("Today and More are always shown.").font(.caption).foregroundStyle(.secondary)
@@ -466,5 +492,36 @@ struct PersonalizeView: View {
         }
         .navigationTitle("Personalize")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Progress + controls for the strap history download.
+struct HistorySyncRows: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        let h = model.history
+        VStack(alignment: .leading, spacing: 8) {
+            switch h.phase {
+            case .idle, .done:
+                row("Status", h.lastCompleted.map { "Last sync " + $0.formatted(date: .abbreviated, time: .shortened) } ?? "Never synced")
+            case .requesting: row("Status", "Asking the strap…")
+            case .receiving: row("Status", "Receiving")
+            case .finishing: row("Status", "Analysing")
+            case .failed(let m): Text(m).font(.footnote).foregroundStyle(.orange)
+            }
+            if h.isActive { ProgressView().controlSize(.small) }
+            if h.recordsDecoded > 0 || h.isActive {
+                row("Records", h.recordsDecoded.formatted())
+                row("Chunks saved", "\(h.chunks)")
+                if let o = h.oldest, let n = h.newest { row("Covers", "\(o.formatted(date: .abbreviated, time: .shortened)) → \(n.formatted(date: .omitted, time: .shortened))") }
+            }
+            row("Stored on phone", "\(h.storedCount.formatted()) records")
+            if let e = h.estimateText, !h.isActive { row("Next sync", e) }
+        }
+        if h.isActive { Button("Stop", role: .destructive) { h.cancel() } }
+        else { Button("Sync now") { h.start(manual: true) }.disabled(model.ble.state != .connected) }
+    }
+    private func row(_ l: String, _ v: String) -> some View {
+        HStack { Text(l).foregroundStyle(.secondary); Spacer(); Text(v).monospacedDigit() }.font(.subheadline)
     }
 }

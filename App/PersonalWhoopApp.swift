@@ -4,6 +4,7 @@ import SwiftUI
 struct PersonalWhoopApp: App {
     @State private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var tick = Date()   // re-evaluates "By time of day" once a minute
 
     private func show(_ t: AppTab) -> Bool { !model.ui.hiddenTabs.contains(t.rawValue) }
 
@@ -19,6 +20,8 @@ struct PersonalWhoopApp: App {
             .environment(model)
             .onChange(of: scenePhase) { _, phase in if phase == .active { model.stopSnooze() } }
             .task { if SnapshotExporter.requested { await SnapshotExporter.run(model: model) } }
+            .preferredColorScheme(model.colorScheme(at: tick))
+            .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { tick = $0 }
             .tint(Color(red: 0.10, green: 0.75, blue: 0.65))
             .buttonBorderShape(.roundedRectangle(radius: 14))
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)   // grows with the user's text size, but not past layouts that still fit

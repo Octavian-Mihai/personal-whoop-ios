@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import StrandAnalytics
 import UserNotifications
 import WidgetKit
@@ -45,6 +46,11 @@ final class AppModel {
 
     let ble = BLEManager()
     let health = HealthBridge()
+    let history = HistorySync()
+    private var historyRaw: RawDay?
+    #if DEBUG
+    private var simulatedStrap: SimulatedStrap?
+    #endif
     private let url: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -61,6 +67,26 @@ final class AppModel {
         UNUserNotificationCenter.current().delegate = Notifier.Delegate.shared
         ble.onHR = { [weak self] bpm, rr in self?.ingestLive(bpm: bpm, rr: rr) }
         ble.onBattery = { [weak self] pct in self?.batteryUpdated(pct) }
+        history.ble = ble
+        history.isConnected = { [weak self] in self?.ble.state == .connected }
+        ble.onHistoryFrame = { [weak self] f in self?.history.handle(f) }
+        ble.onReady = { [weak self] in self?.history.start(manual: false) }
+        history.onFinished = { [weak self] in await self?.historyFinished() }
+        #if DEBUG
+        if let i = CommandLine.arguments.firstIndex(of: "-simulateHistory") {
+            let hours = (i + 1 < CommandLine.arguments.count ? Double(CommandLine.arguments[i + 1]) : nil) ?? 36
+            if settings.useDemoData || needsOnboarding { chooseDataSource(demo: false) }
+            simulatedStrap = SimulatedStrap.install(on: history, hours: hours)
+            Task { try? await Task.sleep(for: .seconds(12)); history.start(manual: true) }   // give the fake strap time to build its frames
+        }
+        #endif
+        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in if self?.ble.state == .connected { self?.history.start(manual: false) } }   // the policy enforces the 15-minute floor
+        }
+        Task { [weak self] in
+            await self?.history.loadStore()
+            if self?.settings.useDemoData == false { await self?.historyFinished() }
+        }
         recompute()
         loadRawAsync()
         let nc = NotificationCenter.default
@@ -84,6 +110,21 @@ final class AppModel {
         guard let n = lastNight else { return today?.rest }
         let key = DayFormat.string(Date(timeIntervalSince1970: n.end))
         return days.first { $0.day == key }?.rest ?? today?.rest
+    }
+
+    /// nil = follow the iPhone. "By time of day" switches to light between the chosen times and dark outside them.
+    func colorScheme(at date: Date = Date()) -> ColorScheme? {
+        switch ui.appearance ?? .system {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        case .schedule:
+            let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+            let now = (c.hour ?? 12) * 60 + (c.minute ?? 0)
+            let from = ui.lightFromMinute ?? 7 * 60, to = ui.lightToMinute ?? 20 * 60
+            let light = from <= to ? (now >= from && now < to) : (now >= from || now < to)
+            return light ? .light : .dark
+        }
     }
 
     var needsOnboarding: Bool { snapshot.onboarded != true }
@@ -217,12 +258,43 @@ final class AppModel {
         writeNightToHealth()
     }
 
+    /// Re-derives nights, daily rows and today's raw streams from everything stored from the strap. Strap-derived values win.
+    func historyFinished() async {
+        guard !settings.useDemoData else { return }
+        let records = await history.store.window(from: Date().addingTimeInterval(-96 * 3600))
+        let profile = settings.profile
+        let analysis = await Task.detached(priority: .userInitiated) { HistoryAnalyzer.analyze(records, profile: profile) }.value
+        historyRaw = analysis.raw
+        var map = Dictionary(snapshot.days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
+        for d in analysis.days {
+            var m = map[d.day] ?? DailyMetric(day: d.day)
+            if let v = d.asleepMin { m.asleepMin = v; m.inBedMin = d.inBedMin; m.deepMin = d.deepMin; m.remMin = d.remMin; m.lightMin = d.lightMin; m.awakeMin = d.awakeMin; m.rest = d.rest }
+            if let v = d.restingHR { m.restingHR = v }
+            if let v = d.hrv { m.hrv = v }
+            if let v = d.effort { m.effort = v }
+            if let v = d.kcal { m.kcal = v }
+            map[d.day] = m
+        }
+        snapshot.days = map.values.sorted { $0.day < $1.day }
+        var nights = snapshot.importedNights ?? []
+        let known = Set(nights.map { $0.start })
+        nights.append(contentsOf: analysis.nights.filter { !known.contains($0.start) })
+        snapshot.importedNights = nights.sorted { $0.start < $1.start }
+        snapshot.onboarded = true
+        recompute()
+    }
+
     /// Today's live heart-rate readings as a raw day (no gravity or beat intervals over the standard HR profile).
     private func realRaw() -> RawDay? {
         let start = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
-        let hr = snapshot.liveHR.filter { $0.t >= start }
-        guard hr.count > 1 else { return nil }
-        return RawDay(hr: hr, gravity: [], rr: [], sleep: nil, workouts: [])
+        let live = snapshot.liveHR.filter { $0.t >= start }
+        if var h = historyRaw {                                  // stored strap history, topped up with live readings
+            let lastT = h.hr.last?.t ?? 0
+            h.hr.append(contentsOf: snapshot.liveHR.filter { $0.t > lastT })
+            return h
+        }
+        guard live.count > 1 else { return nil }
+        return RawDay(hr: live, gravity: [], rr: [], sleep: nil, workouts: [])
     }
 
     private func updateIllness() {
