@@ -66,9 +66,16 @@ struct TodayView: View {
     private func workoutSuggestion(_ s: (start: Double, end: Double)) -> some View {
         Card(title: "Did you just work out?") {
             Text("\(fmtClock(s.start))–\(fmtClock(s.end)) · \(fmtDuration((s.end - s.start) / 60)) of elevated heart rate").font(.footnote)
-            Button("Save workout") {
-                model.addWorkout(SavedWorkout(sport: "Workout", start: s.start, end: s.end, avgHR: nil, peakHR: nil, kcal: nil, effort: nil, distanceM: nil, source: "detected"))
-            }.buttonStyle(.borderedProminent)
+            HStack(spacing: 10) {
+                Button {
+                    model.addWorkout(SavedWorkout(sport: "Workout", start: s.start, end: s.end, avgHR: nil, peakHR: nil, kcal: nil, effort: nil, distanceM: nil, source: "detected"))
+                } label: { Label("Yes, save it", systemImage: "checkmark").frame(maxWidth: .infinity) }
+                    .buttonStyle(.borderedProminent)
+                Button { withAnimation { model.dismissSuggestion() } } label: { Label("No workout", systemImage: "xmark").frame(maxWidth: .infinity) }
+                    .buttonStyle(.bordered)
+            }
+            Text("Elevated heart rate can also come from stress, caffeine or a hot shower — saying no teaches nothing to your scores, it just hides this window.")
+                .font(.caption2).foregroundStyle(.secondary)
         }
     }
 
@@ -82,7 +89,7 @@ struct TodayView: View {
         return VStack(spacing: 14) {
             HeroCard(colors: (band ?? .yellow).gradient.reversed().map { $0 }) {
                 HStack(spacing: 18) {
-                    Ring(value: t?.charge, colors: [.white.opacity(0.85), .white], label: "", unit: "Charge", size: 150, onDark: true)
+                    Ring(value: t?.charge, colors: [.white.opacity(0.6), .white], label: "Charge", unit: "%", size: 160, onDark: true)
                     VStack(alignment: .leading, spacing: 8) {
                         Text(band?.word ?? "Calibrating").font(.title2.bold()).foregroundStyle(.white)
                         Text(t?.charge == nil ? "Need a few more nights to learn your baseline." : "HRV, resting HR, sleep and recent strain, versus your own normal.")
@@ -99,11 +106,11 @@ struct TodayView: View {
                 Card {
                     Ring(value: model.settings.effortOn21Scale ? effort.map { StrainScorer.to21($0) / 21 * 100 } : effort,
                          colors: [Color(red: 0.35, green: 0.65, blue: 1), Color(red: 0.15, green: 0.35, blue: 0.95)],
-                         label: "Effort", unit: model.settings.effortOn21Scale ? "of 21" : "", size: 92).frame(maxWidth: .infinity)
+                         label: "Effort", unit: model.settings.effortOn21Scale ? "/21" : "", size: 110).frame(maxWidth: .infinity)
                 }
                 Card {
                     Ring(value: t?.rest, colors: [Color(red: 0.75, green: 0.5, blue: 1), Color(red: 0.55, green: 0.25, blue: 0.9)],
-                         label: "Rest", unit: "%", size: 92).frame(maxWidth: .infinity)
+                         label: "Rest", unit: "%", size: 110).frame(maxWidth: .infinity)
                 }
             }
             HStack(spacing: 10) {

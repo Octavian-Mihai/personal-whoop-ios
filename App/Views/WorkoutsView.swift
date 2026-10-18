@@ -8,46 +8,155 @@ struct WorkoutsView: View {
     @State private var showAdd = false
     @State private var showStart = false
 
+    private func kind(_ sport: String) -> WorkoutKind { WorkoutKind(rawValue: sport) ?? .other }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    Button { showStart = true } label: { Label("Start a workout", systemImage: "play.circle.fill").font(.headline) }
+            ScrollView {
+                VStack(spacing: 16) {
+                    startHero
+                    weekSummary
+                    heatmapCard
+                    if !model.detected.isEmpty { detectedCard }
+                    loggedCard
+                    toolsGrid
+                    Disclaimer()
                 }
-                Section("Heatmap · last 13 weeks") { heatmap }
-                if !model.detected.isEmpty {
-                    Section("Detected today") {
-                        ForEach(model.detected) { w in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(fmtClock(w.start)) · \(fmtDuration(w.durationMin))").font(.headline)
-                                Text(String(format: "avg %.0f · peak %.0f bpm · %.0f kcal · effort %.0f", w.avgHR, w.peakHR, w.kcal, w.effort ?? 0))
-                                    .font(.caption).foregroundStyle(.secondary)
+                .padding(.horizontal, 16).padding(.bottom, 24)
+            }
+            .background { AmbientBackground(tint: .orange) }
+            .navigationTitle("Workouts")
+            .toolbar { Button { showAdd = true } label: { Image(systemName: "plus.circle.fill") } }
+            .sheet(isPresented: $showAdd) { ManualWorkoutSheet() }
+            .sheet(isPresented: $showStart) { WorkoutStartSheet() }
+        }
+    }
+
+    private var startHero: some View {
+        HeroCard(colors: [Color(red: 1, green: 0.55, blue: 0.25), Color(red: 0.9, green: 0.2, blue: 0.4), Color(red: 0.5, green: 0.15, blue: 0.7)]) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ready to move?").font(.title2.bold()).foregroundStyle(.white)
+                    Text("Live heart rate, zones and coaching tuned to the activity.").font(.footnote).foregroundStyle(.white.opacity(0.85))
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(WorkoutKind.allCases) { k in
+                            Button { model.startWorkout(k) } label: {
+                                VStack(spacing: 6) {
+                                    Image(systemName: k.icon).font(.title3)
+                                    Text(k.rawValue).font(.caption2.weight(.medium))
+                                }
+                                .foregroundStyle(.white)
+                                .frame(width: 66, height: 66)
+                                .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                             }
                         }
                     }
                 }
-                Section("Logged") {
-                    if model.snapshot.workouts.isEmpty { Text("Nothing logged yet").foregroundStyle(.secondary) }
-                    ForEach(model.snapshot.workouts) { w in
-                        NavigationLink { WorkoutDetailView(workout: w) } label: {
-                        VStack(alignment: .leading) {
-                            Text("\(w.sport) · \(fmtDuration((w.end - w.start) / 60))").font(.headline)
-                            Text(Date(timeIntervalSince1970: w.start).formatted(date: .abbreviated, time: .shortened) + (w.kcal.map { String(format: " · %.0f kcal", $0) } ?? ""))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        }
-                    }
-                }
-                Section("Tools") {
-                    NavigationLink("Interval timer") { IntervalTimerView() }
-                    NavigationLink("Lift Log") { LiftLogView() }
-                    NavigationLink("Live session coach") { LiveCoachView() }
+                Button { showStart = true } label: {
+                    Label("More options", systemImage: "slider.horizontal.3").font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 14).padding(.vertical, 8).background(.white, in: Capsule()).foregroundStyle(Color(red: 0.8, green: 0.2, blue: 0.35))
                 }
             }
-            .navigationTitle("Workouts")
-            .toolbar { Button { showAdd = true } label: { Image(systemName: "plus") } }
-            .sheet(isPresented: $showAdd) { ManualWorkoutSheet() }
-            .sheet(isPresented: $showStart) { WorkoutStartSheet() }
+        }
+    }
+
+    private var weekSummary: some View {
+        let cutoff = Date().addingTimeInterval(-7 * 86400).timeIntervalSince1970
+        let w = model.snapshot.workouts.filter { $0.start >= cutoff }
+        let mins = w.reduce(0) { $0 + ($1.end - $1.start) / 60 }
+        let kcal = w.reduce(0) { $0 + ($1.kcal ?? 0) }
+        return HStack(spacing: 12) {
+            summaryTile("figure.run", "Workouts", "\(w.count)", [.orange, .pink])
+            summaryTile("clock.fill", "Minutes", String(format: "%.0f", mins), [.blue, .cyan])
+            summaryTile("flame.fill", "Calories", String(format: "%.0f", kcal), [.red, .orange])
+        }
+    }
+
+    private func summaryTile(_ icon: String, _ label: String, _ value: String, _ colors: [Color]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon).font(.subheadline.bold()).foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
+            Text(value).font(.title2.bold().monospacedDigit())
+            Text("\(label) · 7 d").font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cardBG, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+    }
+
+    private var heatmapCard: some View {
+        Card(title: "Activity", subtitle: "Last 13 weeks, by active calories", icon: "square.grid.3x3.fill") { heatmap }
+    }
+
+    private var detectedCard: some View {
+        Card(title: "Detected today", subtitle: "From heart rate and motion", icon: "waveform.path.ecg") {
+            ForEach(model.detected) { w in
+                HStack(spacing: 12) {
+                    Image(systemName: "bolt.heart.fill").foregroundStyle(.white).frame(width: 38, height: 38)
+                        .background(LinearGradient(colors: [.pink, .orange], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(fmtClock(w.start)) · \(fmtDuration(w.durationMin))").font(.subheadline.weight(.semibold))
+                        Text(String(format: "avg %.0f · peak %.0f bpm · %.0f kcal", w.avgHR, w.peakHR, w.kcal)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if let e = w.effort { Text(String(format: "%.0f", e)).font(.headline.monospacedDigit()).padding(8).background(Color.blue.opacity(0.12), in: Circle()) }
+                }
+            }
+        }
+    }
+
+    private var loggedCard: some View {
+        Card(title: "History", icon: "list.bullet.rectangle.fill") {
+            if model.snapshot.workouts.isEmpty {
+                VStack(spacing: 6) {
+                    Image(systemName: "figure.run.circle").font(.system(size: 40)).foregroundStyle(.tertiary)
+                    Text("No workouts yet — start one above.").font(.footnote).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity).padding(.vertical, 8)
+            }
+            ForEach(model.snapshot.workouts) { w in
+                let k = kind(w.sport)
+                NavigationLink { WorkoutDetailView(workout: w) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: k.icon).foregroundStyle(.white).frame(width: 42, height: 42)
+                            .background(LinearGradient(colors: k.colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(w.sport).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                            Text(Date(timeIntervalSince1970: w.start).formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(fmtDuration((w.end - w.start) / 60)).font(.subheadline.monospacedDigit()).foregroundStyle(.primary)
+                            if let k = w.kcal { Text(String(format: "%.0f kcal", k)).font(.caption).foregroundStyle(.secondary) }
+                        }
+                        Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var toolsGrid: some View {
+        let tools: [(String, String, [Color], AnyView)] = [
+            ("Interval timer", "timer", [.pink, .red], AnyView(IntervalTimerView())),
+            ("Lift Log", "dumbbell.fill", [.purple, .indigo], AnyView(LiftLogView())),
+            ("Live coach", "headphones", [.teal, .blue], AnyView(LiveCoachView())),
+        ]
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+            ForEach(tools, id: \.0) { t in
+                NavigationLink { t.3 } label: {
+                    VStack(spacing: 10) {
+                        Image(systemName: t.1).font(.title3).foregroundStyle(.white)
+                        Text(t.0).font(.caption.weight(.semibold)).foregroundStyle(.white).multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 92)
+                    .background(LinearGradient(colors: t.2, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: t.2.last!.opacity(0.3), radius: 8, y: 4)
+                }
+            }
         }
     }
 
@@ -56,18 +165,26 @@ struct WorkoutsView: View {
         let kcal = Dictionary(uniqueKeysWithValues: model.days.map { ($0.day, ($0.kcal ?? 0) - 2000 > 0 ? ($0.kcal ?? 0) - 2000 : 0) })
         let daily = Array(kcal.values)
         let weekStart = cal.dateInterval(of: .weekOfYear, for: Date())!.start
-        return HStack(spacing: 3) {
-            ForEach(0..<13, id: \.self) { w in
-                VStack(spacing: 3) {
-                    ForEach(0..<7, id: \.self) { d in
-                        let date = cal.date(byAdding: .day, value: (w - 12) * 7 + d, to: weekStart)!
-                        let v = date > Date() ? nil : kcal[DayFormat.string(date)]
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(v == nil ? Color.clear : Color.green.opacity([0.08, 0.3, 0.5, 0.75, 1][ActivityHeatmap.level(value: v ?? 0, daily: daily)]))
-                            .frame(height: 14)
+        return VStack(spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(0..<13, id: \.self) { w in
+                    VStack(spacing: 4) {
+                        ForEach(0..<7, id: \.self) { d in
+                            let date = cal.date(byAdding: .day, value: (w - 12) * 7 + d, to: weekStart)!
+                            let v = date > Date() ? nil : kcal[DayFormat.string(date)]
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(LinearGradient(colors: [.orange, .pink], startPoint: .top, endPoint: .bottom))
+                                .opacity(v == nil ? 0 : [0.08, 0.3, 0.5, 0.75, 1][ActivityHeatmap.level(value: v ?? 0, daily: daily)])
+                                .frame(height: 18)
+                        }
                     }
                 }
             }
+            HStack(spacing: 4) {
+                Text("Less").font(.caption2).foregroundStyle(.secondary)
+                ForEach(0..<5, id: \.self) { i in RoundedRectangle(cornerRadius: 3).fill(Color.orange.opacity([0.08, 0.3, 0.5, 0.75, 1][i])).frame(width: 12, height: 12) }
+                Text("More").font(.caption2).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 }

@@ -109,6 +109,7 @@ struct Snapshot: Codable {
     var settings = AppSettings()
     var days: [DailyMetric] = []
     var ui: UISettings?
+    var dismissedSuggestions: [Double]?
     var hydration: [HydrationLog] = []
     var workouts: [SavedWorkout] = []
     var lifts: [LiftWorkoutLog] = []

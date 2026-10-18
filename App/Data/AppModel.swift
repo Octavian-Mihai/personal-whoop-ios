@@ -130,7 +130,9 @@ final class AppModel {
             last.stress = StressMath.daily(rhr: rhr, hrv: last.hrv ?? 0, historyRHR: Array(hr.dropLast()), historyHRV: Array(hv.dropLast()))
             detected = WorkoutDetector.detect(hr: dayHR, motion: dayMotion, restingHR: rhr, hrMax: hrMax, profile: s)
             last.workouts = detected.count
+            let dismissed = snapshot.dismissedSuggestions ?? []
             autoSuggestion = AutoWorkoutDetector.suggest(hr: dayHR, restingHR: rhr, savedWorkouts: snapshot.workouts.map { ($0.start, $0.end) })
+                .flatMap { s in dismissed.contains { abs($0 - s.start) < 1800 } ? nil : s }
             updated[updated.count - 1] = last
         }
         snapshot.days = updated
@@ -237,6 +239,14 @@ final class AppModel {
         return snapshot.hydration.filter { $0.time >= start }.reduce(0) { $0 + $1.ml }
     }
     var hydrationGoal: Int { HydrationGoal.goalML(male: settings.profile.male, effort: today?.effort) }
+
+    /// "I didn't work out": remember this window so it isn't suggested again.
+    func dismissSuggestion() {
+        guard let s = autoSuggestion else { return }
+        snapshot.dismissedSuggestions = (snapshot.dismissedSuggestions ?? []) + [s.start]
+        autoSuggestion = nil
+        save()
+    }
 
     func addWorkout(_ w: SavedWorkout) { snapshot.workouts.append(w); snapshot.workouts.sort { $0.start > $1.start }; recompute() }
     func addLift(_ l: LiftWorkoutLog) { snapshot.lifts.insert(l, at: 0); save() }

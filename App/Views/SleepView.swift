@@ -37,7 +37,7 @@ struct SleepView: View {
                             .font(.caption).foregroundStyle(.white.opacity(0.75))
                     }
                     Spacer()
-                    Ring(value: model.today?.rest, colors: [.white.opacity(0.85), .white], label: "", unit: "Rest", size: 78, onDark: true)
+                    Ring(value: model.today?.rest, colors: [.white.opacity(0.6), .white], label: "Rest", unit: "%", size: 96, onDark: true)
                 }
                 Chart(Array(n.segments.enumerated()), id: \.offset) { _, s in
                     RectangleMark(xStart: .value("s", Date(timeIntervalSince1970: s.start)), xEnd: .value("e", Date(timeIntervalSince1970: s.end)),

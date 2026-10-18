@@ -65,25 +65,32 @@ struct Ring: View {
 
     var body: some View {
         let lw = lineWidth ?? size * 0.11
-        VStack(spacing: 8) {
-            ZStack {
-                Circle().stroke(onDark ? Color.white.opacity(0.22) : (colors.last ?? .gray).opacity(0.15), lineWidth: lw)
-                Circle().trim(from: 0, to: shown / 100)
-                    .stroke(AngularGradient(colors: colors + [colors.last ?? .gray], center: .center, startAngle: .degrees(0), endAngle: .degrees(360 * max(0.05, shown / 100))),
-                            style: StrokeStyle(lineWidth: lw, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: (colors.last ?? .gray).opacity(onDark ? 0.0 : 0.45), radius: size * 0.08)
-                VStack(spacing: 0) {
-                    Text(value.map { String(format: "%.0f", $0) } ?? "—")
-                        .font(.system(size: size * 0.32, weight: .bold, design: .rounded)).monospacedDigit()
-                        .contentTransition(.numericText())
-                        .foregroundStyle(onDark ? .white : .primary)
-                    if !unit.isEmpty { Text(unit).font(.caption2).foregroundStyle(onDark ? Color.white.opacity(0.8) : .secondary) }
-                }
+        let sweep = 0.75   // 270° gauge, opening at the bottom
+        ZStack {
+            Circle().trim(from: 0, to: sweep)
+                .stroke(onDark ? Color.white.opacity(0.22) : (colors.last ?? .gray).opacity(0.15), style: StrokeStyle(lineWidth: lw, lineCap: .round))
+                .rotationEffect(.degrees(135))
+            Circle().trim(from: 0, to: sweep * shown / 100)
+                .stroke(AngularGradient(colors: colors, center: .center, startAngle: .degrees(0), endAngle: .degrees(270)),
+                        style: StrokeStyle(lineWidth: lw, lineCap: .round))
+                .rotationEffect(.degrees(135))
+                .shadow(color: (colors.last ?? .gray).opacity(onDark ? 0.0 : 0.45), radius: size * 0.07)
+            if !label.isEmpty {
+                Text(label.uppercased()).font(.system(size: max(9, size * 0.095), weight: .semibold)).tracking(1)
+                    .foregroundStyle(onDark ? Color.white.opacity(0.8) : .secondary)
+                    .offset(y: -size * 0.04)
             }
-            .frame(width: size, height: size)
-            if !label.isEmpty { Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary) }
+            HStack(alignment: .firstTextBaseline, spacing: 1) {
+                Text(value.map { String(format: "%.0f", $0) } ?? "—")
+                    .font(.system(size: size * 0.30, weight: .bold, design: .rounded)).monospacedDigit()
+                    .contentTransition(.numericText())
+                if !unit.isEmpty { Text(unit).font(.system(size: size * 0.11, weight: .semibold)).opacity(0.7) }
+            }
+            .foregroundStyle(onDark ? .white : .primary)
+            .offset(y: size * 0.34)
         }
+        .frame(width: size, height: size)
+        .padding(.bottom, size * 0.04)
         .onAppear { withAnimation(.easeOut(duration: 0.9)) { shown = value ?? 0 } }
         .onChange(of: value) { _, v in withAnimation(.easeOut(duration: 0.6)) { shown = v ?? 0 } }
     }
