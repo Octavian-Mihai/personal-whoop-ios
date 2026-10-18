@@ -17,12 +17,18 @@ enum Palette {
     static let lavender = [Color(red: 0.84, green: 0.78, blue: 0.97), Color(red: 0.69, green: 0.62, blue: 0.90)]
     static let peach = [Color(red: 0.99, green: 0.82, blue: 0.70), Color(red: 0.95, green: 0.68, blue: 0.60)]
     static let aqua = [Color(red: 0.74, green: 0.92, blue: 0.93), Color(red: 0.55, green: 0.80, blue: 0.84)]
+    // Fuller-bodied tones for the headline Charge / Effort / Rest gauges.
+    static let mintRich = [Color(red: 0.38, green: 0.78, blue: 0.60), Color(red: 0.20, green: 0.60, blue: 0.46)]
+    static let butterRich = [Color(red: 0.96, green: 0.76, blue: 0.32), Color(red: 0.86, green: 0.55, blue: 0.18)]
+    static let roseRich = [Color(red: 0.94, green: 0.52, blue: 0.54), Color(red: 0.80, green: 0.30, blue: 0.42)]
+    static let skyRich = [Color(red: 0.45, green: 0.66, blue: 0.96), Color(red: 0.25, green: 0.45, blue: 0.86)]
+    static let lavenderRich = [Color(red: 0.66, green: 0.54, blue: 0.94), Color(red: 0.46, green: 0.32, blue: 0.82)]
     static let sage = Color(red: 0.42, green: 0.70, blue: 0.58)
     static let clay = Color(red: 0.90, green: 0.55, blue: 0.45)
 }
 
 extension ChargeBand {
-    var gradient: [Color] { self == .green ? Palette.mint : (self == .yellow ? Palette.butter : Palette.rose) }
+    var gradient: [Color] { self == .green ? Palette.mintRich : (self == .yellow ? Palette.butterRich : Palette.roseRich) }
     var word: String { self == .green ? "Primed" : (self == .yellow ? "Steady" : "Take it easy") }
 }
 
@@ -223,6 +229,7 @@ struct AmbientBackground: View {
 struct HeroCard<Content: View>: View {
     var colors: [Color]
     var stars = false
+    var decor = true
     @ViewBuilder var content: Content
     var body: some View {
         content
@@ -231,8 +238,10 @@ struct HeroCard<Content: View>: View {
             .background {
                 ZStack {
                     LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Circle().fill(Color.white.opacity(0.10)).frame(width: 220).offset(x: 130, y: -90)
-                    Circle().fill(Color.white.opacity(0.06)).frame(width: 160).offset(x: -140, y: 110)
+                    if decor {
+                        Circle().fill(Color.white.opacity(0.10)).frame(width: 220).offset(x: 130, y: -90)
+                        Circle().fill(Color.white.opacity(0.06)).frame(width: 160).offset(x: -140, y: 110)
+                    }
                     if stars { Starfield() }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))

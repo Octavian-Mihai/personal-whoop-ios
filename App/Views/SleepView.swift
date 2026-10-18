@@ -17,17 +17,17 @@ struct SleepView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
-            .background { AmbientBackground(tint: Palette.lavender[0]) }
+            .background { AmbientBackground(tint: Palette.lavenderRich[0]) }
             .navigationTitle("Sleep")
         }
     }
 
     private func level(_ s: SleepStage) -> Double { [SleepStage.awake: 3, .rem: 2, .light: 1, .deep: 0][s] ?? 1 }
-    private func color(_ s: SleepStage) -> Color { [SleepStage.awake: Color(red: 0.98, green: 0.78, blue: 0.66), .rem: Color(red: 0.86, green: 0.76, blue: 0.97), .light: Color(red: 0.70, green: 0.83, blue: 0.98), .deep: Color(red: 0.62, green: 0.66, blue: 0.95)][s] ?? .gray }
+    private func color(_ s: SleepStage) -> Color { [SleepStage.awake: Color(red: 0.98, green: 0.66, blue: 0.48), .rem: Color(red: 0.80, green: 0.60, blue: 0.98), .light: Color(red: 0.45, green: 0.72, blue: 0.98), .deep: Color(red: 0.42, green: 0.45, blue: 0.92)][s] ?? .gray }
 
     private func hypnogram(_ n: SleepSession) -> some View {
         let m = HypnogramMetrics(session: n)
-        return HeroCard(colors: [Color(red: 0.23, green: 0.26, blue: 0.47), Color(red: 0.50, green: 0.43, blue: 0.72)], stars: true) {
+        return HeroCard(colors: [Color(red: 0.10, green: 0.13, blue: 0.32), Color(red: 0.30, green: 0.22, blue: 0.58)], stars: true, decor: false) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -37,7 +37,7 @@ struct SleepView: View {
                             .font(.caption).foregroundStyle(.white.opacity(0.75))
                     }
                     Spacer()
-                    Ring(value: model.today?.rest, colors: [.white.opacity(0.6), .white], label: "Rest", unit: "%", size: 96, onDark: true)
+                    Ring(value: model.today?.rest, colors: [Palette.lavender[0], .white], label: "Rest", unit: "%", size: 96, onDark: true)
                 }
                 Chart(Array(n.segments.enumerated()), id: \.offset) { _, s in
                     RectangleMark(xStart: .value("s", Date(timeIntervalSince1970: s.start)), xEnd: .value("e", Date(timeIntervalSince1970: s.end)),

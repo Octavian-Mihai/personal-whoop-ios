@@ -34,7 +34,7 @@ enum MetricKind: String, Identifiable {
     }
     var colors: [Color] {
         switch self {
-        case .charge: return Palette.mint; case .effort: return Palette.sky; case .rest: return Palette.lavender
+        case .charge: return Palette.mintRich; case .effort: return Palette.skyRich; case .rest: return Palette.lavenderRich
         case .hrv: return Palette.aqua; case .restingHR: return Palette.rose; case .respiration: return Palette.sky
         case .skinTemp: return Palette.peach; case .activityBalance: return Palette.butter
         }
@@ -51,6 +51,7 @@ enum MetricKind: String, Identifiable {
         case .hrv: return \.hrv; case .restingHR: return \.restingHR; case .respiration: return \.respiration; case .skinTemp: return \.skinTempDev
         }
     }
+    var isRich: Bool { self == .charge || self == .effort || self == .rest }
     var higherIsBetter: Bool? {
         switch self { case .charge, .rest, .hrv: return true; case .restingHR, .respiration: return false; default: return nil }
     }
@@ -117,11 +118,11 @@ struct MetricDetailView: View {
     private var hero: some View {
         HeroCard(colors: kind.colors) {
             HStack(spacing: 14) {
-                Image(systemName: kind.icon).font(.title).foregroundStyle(Palette.ink)
+                Image(systemName: kind.icon).font(.title).foregroundStyle(kind.isRich ? Color.white : Palette.ink)
                     .frame(width: 56, height: 56).background(.white.opacity(0.45), in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(today.map { fmt($0) + kind.unit } ?? "—").font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(Palette.ink)
-                    Text(verdict).font(.subheadline).foregroundStyle(Palette.ink.opacity(0.75))
+                    Text(today.map { fmt($0) + kind.unit } ?? "—").font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(kind.isRich ? Color.white : Palette.ink)
+                    Text(verdict).font(.subheadline).foregroundStyle((kind.isRich ? Color.white.opacity(0.85) : Palette.ink.opacity(0.75)))
                 }
             }
         }

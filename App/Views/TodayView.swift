@@ -91,18 +91,18 @@ struct TodayView: View {
         return VStack(spacing: 14) {
             HeroCard(colors: (band ?? .yellow).gradient) {
                 HStack(spacing: 18) {
-                    Ring(value: t?.charge, colors: [.white.opacity(0.75), .white], label: "Charge", unit: "%", size: 160, onDark: true, textColor: Palette.ink)
+                    Ring(value: t?.charge, colors: [.white.opacity(0.85), .white], label: "Charge", unit: "%", size: 160, onDark: true, textColor: Color.white)
                         .onTapGesture { detail = .charge }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(band?.word ?? "Calibrating").font(.title2.bold()).foregroundStyle(Palette.ink)
+                        Text(band?.word ?? "Calibrating").font(.title2.bold()).foregroundStyle(Color.white)
                         Text(t?.charge == nil ? "Need a few more nights to learn your baseline." : "HRV, resting HR, sleep and recent strain, versus your own normal.")
-                            .font(.footnote).foregroundStyle(Palette.ink.opacity(0.75))
+                            .font(.footnote).foregroundStyle(Color.white.opacity(0.88))
                         HStack(spacing: 6) {
                             Text(ConfidenceTier.forNights(b?.hrv.count ?? 0).rawValue).font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 8).padding(.vertical, 3).background(.white.opacity(0.45), in: Capsule()).foregroundStyle(Palette.ink)
-                            Text("\(b?.hrv.count ?? 0) nights").font(.caption2).foregroundStyle(Palette.ink.opacity(0.7))
+                                .padding(.horizontal, 8).padding(.vertical, 3).background(.white.opacity(0.25), in: Capsule()).foregroundStyle(Color.white)
+                            Text("\(b?.hrv.count ?? 0) nights").font(.caption2).foregroundStyle(Color.white.opacity(0.8))
                         }
-                        Label("Tap for details", systemImage: "chevron.right.circle").font(.caption2).foregroundStyle(Palette.ink.opacity(0.55))
+                        Label("Tap for details", systemImage: "chevron.right.circle").font(.caption2).foregroundStyle(Color.white.opacity(0.7))
                     }
                 }
             }
@@ -110,11 +110,11 @@ struct TodayView: View {
             HStack(spacing: 12) {
                 Card {
                     Ring(value: model.settings.effortOn21Scale ? effort.map { StrainScorer.to21($0) / 21 * 100 } : effort,
-                         colors: Palette.sky, label: "Effort", unit: model.settings.effortOn21Scale ? "/21" : "", size: 110).frame(maxWidth: .infinity)
+                         colors: Palette.skyRich, label: "Effort", unit: model.settings.effortOn21Scale ? "/21" : "", size: 110).frame(maxWidth: .infinity)
                 }
                 .contentShape(Rectangle()).onTapGesture { detail = .effort }
                 Card {
-                    Ring(value: t?.rest, colors: Palette.lavender, label: "Rest", unit: "%", size: 110).frame(maxWidth: .infinity)
+                    Ring(value: t?.rest, colors: Palette.lavenderRich, label: "Rest", unit: "%", size: 110).frame(maxWidth: .infinity)
                 }
                 .contentShape(Rectangle()).onTapGesture { detail = .rest }
             }

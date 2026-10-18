@@ -15,11 +15,11 @@ struct WorkoutsView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     startHero
+                    intervalCard
                     weekSummary
                     heatmapCard
                     if !model.detected.isEmpty { detectedCard }
                     loggedCard
-                    toolsGrid
                     Disclaimer()
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
@@ -139,25 +139,23 @@ struct WorkoutsView: View {
         }
     }
 
-    private var toolsGrid: some View {
-        let tools: [(String, String, [Color], AnyView)] = [
-            ("Interval timer", "timer", Palette.rose, AnyView(IntervalTimerView())),
-            ("Lift Log", "dumbbell.fill", Palette.lavender, AnyView(LiftLogView())),
-            ("Live coach", "headphones", Palette.aqua, AnyView(LiveCoachView())),
-        ]
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-            ForEach(tools, id: \.0) { t in
-                NavigationLink { t.3 } label: {
-                    VStack(spacing: 10) {
-                        Image(systemName: t.1).font(.title3).foregroundStyle(Palette.ink)
-                        Text(t.0).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink).multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 92)
-                    .background(LinearGradient(colors: t.2, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .shadow(color: t.2.last!.opacity(0.3), radius: 8, y: 4)
+    private var intervalCard: some View {
+        NavigationLink { IntervalTimerView() } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "timer").font(.title2).foregroundStyle(Palette.ink)
+                    .frame(width: 52, height: 52).background(.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Interval timer").font(.headline).foregroundStyle(Palette.ink)
+                    Text("Work / rest rounds with wrist buzzes").font(.caption).foregroundStyle(Palette.ink.opacity(0.7))
                 }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(Palette.ink.opacity(0.5))
             }
+            .padding(14)
+            .background(LinearGradient(colors: Palette.rose, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: Palette.rose[1].opacity(0.3), radius: 10, y: 5)
         }
+        .buttonStyle(.plain)
     }
 
     private var heatmap: some View {
