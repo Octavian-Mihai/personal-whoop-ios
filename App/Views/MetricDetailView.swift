@@ -142,7 +142,7 @@ struct MetricDetailView: View {
 
     private var chartCard: some View {
         Card(title: "Trend", subtitle: "Last \(range) days", icon: "chart.xyaxis.line") {
-            Picker("Range", selection: $range) { Text("14d").tag(14); Text("30d").tag(30); Text("60d").tag(60) }.pickerStyle(.segmented)
+            Picker("Range", selection: $range) { Text("7d").tag(7); Text("14d").tag(14); Text("30d").tag(30); Text("60d").tag(60) }.pickerStyle(.segmented)
             Chart {
                 ForEach(days) { d in
                     if let v = d[keyPath: kind.keyPath] {

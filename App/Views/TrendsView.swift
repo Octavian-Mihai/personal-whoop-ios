@@ -12,7 +12,7 @@ struct TrendsView: View {
     var content: some View {
             VStack(spacing: 14) {
                 Picker("Range", selection: $range) {
-                    Text("30d").tag(30); Text("60d").tag(60)
+                    Text("7d").tag(7); Text("14d").tag(14); Text("30d").tag(30); Text("60d").tag(60)
                 }.pickerStyle(.segmented)
 
                 tileGrid
