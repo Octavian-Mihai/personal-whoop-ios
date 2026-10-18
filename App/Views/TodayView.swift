@@ -17,7 +17,7 @@ struct TodayView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
-            .background(Color.screenBG)
+            .background { AmbientBackground(tint: (model.today?.charge.map(ChargeBand.of) ?? .yellow).gradient[0]) }
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -80,26 +80,30 @@ struct TodayView: View {
         let effort = t?.effort
         let b = model.baselines
         return VStack(spacing: 14) {
-            Card {
-                HStack(spacing: 16) {
-                    Ring(value: t?.charge, colors: (band ?? .yellow).gradient, label: "", unit: "Charge", size: 148)
+            HeroCard(colors: (band ?? .yellow).gradient.reversed().map { $0 }) {
+                HStack(spacing: 18) {
+                    Ring(value: t?.charge, colors: [.white.opacity(0.85), .white], label: "", unit: "Charge", size: 150, onDark: true)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(band?.word ?? "Calibrating").font(.title3.bold())
-                        Text(t?.charge == nil ? "Need a few more nights to learn your baseline." : "Based on HRV, resting HR, sleep and recent strain, vs your own normal.")
-                            .font(.footnote).foregroundStyle(.secondary)
+                        Text(band?.word ?? "Calibrating").font(.title2.bold()).foregroundStyle(.white)
+                        Text(t?.charge == nil ? "Need a few more nights to learn your baseline." : "HRV, resting HR, sleep and recent strain, versus your own normal.")
+                            .font(.footnote).foregroundStyle(.white.opacity(0.85))
                         HStack(spacing: 6) {
-                            TierBadge(tier: ConfidenceTier.forNights(b?.hrv.count ?? 0))
-                            Text("\(b?.hrv.count ?? 0) nights").font(.caption2).foregroundStyle(.secondary)
+                            Text(ConfidenceTier.forNights(b?.hrv.count ?? 0).rawValue).font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 8).padding(.vertical, 3).background(.white.opacity(0.22), in: Capsule()).foregroundStyle(.white)
+                            Text("\(b?.hrv.count ?? 0) nights").font(.caption2).foregroundStyle(.white.opacity(0.8))
                         }
                     }
                 }
-                Divider()
-                HStack(alignment: .top, spacing: 0) {
+            }
+            HStack(spacing: 12) {
+                Card {
                     Ring(value: model.settings.effortOn21Scale ? effort.map { StrainScorer.to21($0) / 21 * 100 } : effort,
                          colors: [Color(red: 0.35, green: 0.65, blue: 1), Color(red: 0.15, green: 0.35, blue: 0.95)],
-                         label: "Effort", unit: model.settings.effortOn21Scale ? "of 21" : "", size: 84).frame(maxWidth: .infinity)
+                         label: "Effort", unit: model.settings.effortOn21Scale ? "of 21" : "", size: 92).frame(maxWidth: .infinity)
+                }
+                Card {
                     Ring(value: t?.rest, colors: [Color(red: 0.75, green: 0.5, blue: 1), Color(red: 0.55, green: 0.25, blue: 0.9)],
-                         label: "Rest", unit: "%", size: 84).frame(maxWidth: .infinity)
+                         label: "Rest", unit: "%", size: 92).frame(maxWidth: .infinity)
                 }
             }
             HStack(spacing: 10) {

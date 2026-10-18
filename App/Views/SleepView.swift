@@ -17,30 +17,44 @@ struct SleepView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
-            .background(Color.screenBG)
+            .background { AmbientBackground(tint: .indigo) }
             .navigationTitle("Sleep")
         }
     }
 
     private func level(_ s: SleepStage) -> Double { [SleepStage.awake: 3, .rem: 2, .light: 1, .deep: 0][s] ?? 1 }
-    private func color(_ s: SleepStage) -> Color { [SleepStage.awake: .orange, .rem: .purple, .light: .blue, .deep: .indigo][s] ?? .gray }
+    private func color(_ s: SleepStage) -> Color { [SleepStage.awake: Color(red: 1, green: 0.62, blue: 0.3), .rem: Color(red: 0.85, green: 0.5, blue: 1), .light: Color(red: 0.4, green: 0.7, blue: 1), .deep: Color(red: 0.45, green: 0.45, blue: 1)][s] ?? .gray }
 
     private func hypnogram(_ n: SleepSession) -> some View {
-        Card(title: "Last night", subtitle: "\(fmtClock(n.start)) – \(fmtClock(n.end))", icon: "moon.stars.fill") {
-            Chart(Array(n.segments.enumerated()), id: \.offset) { _, s in
-                RectangleMark(xStart: .value("s", Date(timeIntervalSince1970: s.start)), xEnd: .value("e", Date(timeIntervalSince1970: s.end)),
-                              yStart: .value("l", level(s.stage)), yEnd: .value("h", level(s.stage) + 0.8))
-                    .foregroundStyle(color(s.stage))
-            }
-            .chartYAxis {
-                AxisMarks(values: [0.4, 1.4, 2.4, 3.4]) { v in
-                    AxisValueLabel { Text(["Deep", "Light", "REM", "Awake"][min(3, Int(v.as(Double.self) ?? 0))]) }
+        let m = HypnogramMetrics(session: n)
+        return HeroCard(colors: [Color(red: 0.07, green: 0.09, blue: 0.28), Color(red: 0.30, green: 0.15, blue: 0.55)], stars: true) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("Last night", systemImage: "moon.stars.fill").font(.subheadline).foregroundStyle(.white.opacity(0.8))
+                        Text(fmtDuration(m.tst)).font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                        Text("\(fmtClock(n.start)) – \(fmtClock(n.end)) · \(String(format: "%.0f%%", m.efficiency * 100)) efficient")
+                            .font(.caption).foregroundStyle(.white.opacity(0.75))
+                    }
+                    Spacer()
+                    Ring(value: model.today?.rest, colors: [.white.opacity(0.85), .white], label: "", unit: "Rest", size: 78, onDark: true)
                 }
-            }
-            .chartYScale(domain: 0...4).frame(height: 170)
-            HStack(spacing: 14) {
-                ForEach([SleepStage.awake, .rem, .light, .deep], id: \.self) { st in
-                    HStack(spacing: 5) { Circle().fill(color(st)).frame(width: 8, height: 8); Text(st.rawValue.capitalized).font(.caption2).foregroundStyle(.secondary) }
+                Chart(Array(n.segments.enumerated()), id: \.offset) { _, s in
+                    RectangleMark(xStart: .value("s", Date(timeIntervalSince1970: s.start)), xEnd: .value("e", Date(timeIntervalSince1970: s.end)),
+                                  yStart: .value("l", level(s.stage)), yEnd: .value("h", level(s.stage) + 0.8))
+                        .foregroundStyle(color(s.stage)).cornerRadius(2)
+                }
+                .chartYAxis {
+                    AxisMarks(values: [0.4, 1.4, 2.4, 3.4]) { v in
+                        AxisValueLabel { Text(["Deep", "Light", "REM", "Awake"][min(3, Int(v.as(Double.self) ?? 0))]).foregroundStyle(.white.opacity(0.7)) }
+                    }
+                }
+                .chartXAxis { AxisMarks { _ in AxisValueLabel().foregroundStyle(.white.opacity(0.7)) } }
+                .chartYScale(domain: 0...4).frame(height: 150)
+                HStack(spacing: 14) {
+                    ForEach([SleepStage.awake, .rem, .light, .deep], id: \.self) { st in
+                        HStack(spacing: 5) { Circle().fill(color(st)).frame(width: 8, height: 8); Text(st.rawValue.capitalized).font(.caption2).foregroundStyle(.white.opacity(0.8)) }
+                    }
                 }
             }
         }

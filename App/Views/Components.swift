@@ -40,7 +40,8 @@ struct Card<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(Color.cardBG, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.primary.opacity(0.06)))
+        .shadow(color: .black.opacity(0.06), radius: 14, y: 5)
     }
 }
 
@@ -52,29 +53,32 @@ struct Ring: View {
     var unit: String = ""
     var size: CGFloat = 96
     var lineWidth: CGFloat? = nil
+    var onDark = false
     @State private var shown = 0.0
 
     init(value: Double?, color: Color, label: String, unit: String = "", size: CGFloat = 96) {
         self.value = value; self.colors = [color.opacity(0.7), color]; self.label = label; self.unit = unit; self.size = size
     }
-    init(value: Double?, colors: [Color], label: String, unit: String = "", size: CGFloat = 96) {
-        self.value = value; self.colors = colors; self.label = label; self.unit = unit; self.size = size
+    init(value: Double?, colors: [Color], label: String, unit: String = "", size: CGFloat = 96, onDark: Bool = false) {
+        self.value = value; self.colors = colors; self.label = label; self.unit = unit; self.size = size; self.onDark = onDark
     }
 
     var body: some View {
         let lw = lineWidth ?? size * 0.11
         VStack(spacing: 8) {
             ZStack {
-                Circle().stroke((colors.last ?? .gray).opacity(0.15), lineWidth: lw)
+                Circle().stroke(onDark ? Color.white.opacity(0.22) : (colors.last ?? .gray).opacity(0.15), lineWidth: lw)
                 Circle().trim(from: 0, to: shown / 100)
                     .stroke(AngularGradient(colors: colors + [colors.last ?? .gray], center: .center, startAngle: .degrees(0), endAngle: .degrees(360 * max(0.05, shown / 100))),
                             style: StrokeStyle(lineWidth: lw, lineCap: .round))
                     .rotationEffect(.degrees(-90))
+                    .shadow(color: (colors.last ?? .gray).opacity(onDark ? 0.0 : 0.45), radius: size * 0.08)
                 VStack(spacing: 0) {
                     Text(value.map { String(format: "%.0f", $0) } ?? "—")
                         .font(.system(size: size * 0.32, weight: .bold, design: .rounded)).monospacedDigit()
                         .contentTransition(.numericText())
-                    if !unit.isEmpty { Text(unit).font(.caption2).foregroundStyle(.secondary) }
+                        .foregroundStyle(onDark ? .white : .primary)
+                    if !unit.isEmpty { Text(unit).font(.caption2).foregroundStyle(onDark ? Color.white.opacity(0.8) : .secondary) }
                 }
             }
             .frame(width: size, height: size)
@@ -181,5 +185,57 @@ struct Disclaimer: View {
     var body: some View {
         Text("Everything here is an on-device approximation, not a medical device and not WHOOP's scoring.")
             .font(.caption2).foregroundStyle(.secondary).padding(.horizontal)
+    }
+}
+
+/// Soft colour blobs behind a screen.
+struct AmbientBackground: View {
+    var tint: Color = .teal
+    var body: some View {
+        ZStack {
+            Color.screenBG
+            GeometryReader { g in
+                Circle().fill(tint.opacity(0.28)).frame(width: g.size.width * 0.95).blur(radius: 70).offset(x: g.size.width * 0.35, y: -g.size.width * 0.35)
+                Circle().fill(Color.purple.opacity(0.12)).frame(width: g.size.width * 0.8).blur(radius: 80).offset(x: -g.size.width * 0.45, y: g.size.height * 0.30)
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// Full-colour hero container.
+struct HeroCard<Content: View>: View {
+    var colors: [Color]
+    var stars = false
+    @ViewBuilder var content: Content
+    var body: some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background {
+                ZStack {
+                    LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Circle().fill(Color.white.opacity(0.10)).frame(width: 220).offset(x: 130, y: -90)
+                    Circle().fill(Color.white.opacity(0.06)).frame(width: 160).offset(x: -140, y: 110)
+                    if stars { Starfield() }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            }
+            .shadow(color: (colors.last ?? .black).opacity(0.35), radius: 18, y: 8)
+    }
+}
+
+struct Starfield: View {
+    var body: some View {
+        Canvas { ctx, size in
+            var g = SystemRandomNumberGenerator()
+            var seed: UInt64 = 42
+            func r() -> Double { seed = seed &* 6364136223846793005 &+ 1442695040888963407; return Double(seed >> 11) / Double(1 << 53) }
+            _ = g.next()
+            for _ in 0..<40 {
+                let x = r() * size.width, y = r() * size.height, d = 1 + r() * 1.8
+                ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: d, height: d)), with: .color(.white.opacity(0.25 + r() * 0.5)))
+            }
+        }
     }
 }
