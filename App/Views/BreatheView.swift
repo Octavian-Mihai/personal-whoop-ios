@@ -36,6 +36,7 @@ struct BreatheView: View {
                 }
             }
             .navigationTitle("Breathe")
+            .navigationBarTitleDisplayMode(.inline)
             .onDisappear { stop() }
         }
     }
@@ -120,6 +121,7 @@ struct SpotHRVView: View {
             }
         }
         .navigationTitle("Spot HRV")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func start() {
@@ -153,6 +155,7 @@ struct HRDownView: View {
                 .font(.caption).multilineTextAlignment(.center).padding()
         }
         .navigationTitle("HR-down")
+        .navigationBarTitleDisplayMode(.inline)
         .onDisappear { timer?.invalidate() }
     }
 
@@ -191,5 +194,6 @@ struct ResonanceView: View {
             LabeledContent("Your pace", value: String(format: "%.1f br/min", best ?? 5.5))
         }
         .navigationTitle("Resonance")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

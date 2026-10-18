@@ -34,6 +34,7 @@ struct TrendsView: View {
             ScrollView { content }
             .background { AmbientBackground(tint: Palette.mint[0]) }
             .navigationTitle("Trends")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $detail) { MetricDetailView(kind: $0).environment(model) }
         }
     }

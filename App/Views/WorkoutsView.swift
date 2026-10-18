@@ -33,6 +33,7 @@ struct WorkoutsView: View {
             ScrollView { content }
             .background { AmbientBackground(tint: Palette.peach[0]) }
             .navigationTitle("Workouts")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button { showAdd = true } label: { Image(systemName: "plus.circle.fill") } }
             .sheet(isPresented: $showAdd) { ManualWorkoutSheet() }
             .sheet(isPresented: $showStart) { WorkoutStartSheet() }
@@ -208,6 +209,7 @@ struct ManualWorkoutSheet: View {
                 Text("Strain stays empty until a heart-rate window exists — it's never invented.").font(.caption).foregroundStyle(.secondary)
             }
             .navigationTitle("Add workout")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") { save() } }
@@ -258,6 +260,7 @@ struct IntervalTimerView: View {
             }
         }
         .navigationTitle("Interval timer")
+        .navigationBarTitleDisplayMode(.inline)
         .onDisappear { stop() }
     }
 

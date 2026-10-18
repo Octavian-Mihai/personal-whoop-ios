@@ -27,6 +27,7 @@ struct SleepView: View {
             ScrollView { content }
             .background { AmbientBackground(tint: Palette.lavenderRich[0]) }
             .navigationTitle("Sleep")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 

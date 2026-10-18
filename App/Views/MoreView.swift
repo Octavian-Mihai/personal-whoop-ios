@@ -34,6 +34,7 @@ struct MoreView: View {
                 }
             }
             .navigationTitle("More")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
@@ -59,6 +60,7 @@ struct LongevityView: View {
                 Text("Opt-in retrospective TDEE needs 14+ intake days and 6+ weigh-ins; always shown as an interval.").font(.caption)
             }
         }.navigationTitle("Vitality")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -90,6 +92,7 @@ struct CircadianView: View {
                 Text("Moves at most 1 h/day. Light and sleep-timing guidance only.").font(.caption2)
             }
         }.navigationTitle("Body clock")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -108,6 +111,7 @@ struct CycleView: View {
             Text("Wellness awareness only — not contraception, not a fertility or ovulation predictor, not a diagnosis. Needs ≥ 42 nights; without a clear pattern the phase reads unknown rather than guessed.")
                 .font(.caption2)
         }.navigationTitle("Cycle")
+        .navigationBarTitleDisplayMode(.inline)
     }
     private func estimate() -> CycleEstimate {
         let d = model.days
@@ -133,6 +137,7 @@ struct IllnessView: View {
             Text("Two or more of resting HR ↑, respiration ↑, HRV ↓, skin temperature ↑ must each reach z ≥ 2. Alcohol, workouts or feeling sick downgrade the result. The copy never names a condition.")
                 .font(.caption2)
         }.navigationTitle("Illness watch")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -165,6 +170,7 @@ struct AlarmView: View {
             }
         }
         .navigationTitle("Alarms")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var weekdayPicker: some View {
@@ -235,6 +241,7 @@ struct DeviceView: View {
             }
             Section("Log") { ForEach(model.ble.log.suffix(40).reversed(), id: \.self) { Text($0).font(.caption2.monospaced()) } }
         }.navigationTitle("Device")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -260,6 +267,7 @@ struct FusionView: View {
                 example(.sleep, [(.noopComputed, s), (.appleHealth, s + 35)])
             }
         }.navigationTitle("Combining sources")
+        .navigationBarTitleDisplayMode(.inline)
     }
     @ViewBuilder private func example(_ m: FusionMetric, _ inputs: [(DataSource, Double)]) -> some View {
         if let r = FusionResolver.resolve(m, inputs: inputs) {
@@ -289,6 +297,7 @@ struct BackupView: View {
             }
         }
         .navigationTitle("Backup")
+        .navigationBarTitleDisplayMode(.inline)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             guard case .success(let u) = result else { return }
             let ok = u.startAccessingSecurityScopedResource(); defer { if ok { u.stopAccessingSecurityScopedResource() } }
@@ -315,6 +324,7 @@ struct TestCentreView: View {
                 Text("Identifiers are scrubbed from the text before you see it. Nothing leaves the device unless you share it.").font(.caption2)
             }
         }.navigationTitle("Test Centre")
+        .navigationBarTitleDisplayMode(.inline)
     }
     private func report() -> String {
         var s = "Personal Whoop report\nDomains: \(domains.sorted().joined(separator: ", "))\n"
@@ -353,6 +363,7 @@ struct SettingsView: View {
                 Toggle("Demo data", isOn: Binding(get: { model.settings.useDemoData }, set: { model.settings.useDemoData = $0 }))
             }
         }.navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -369,6 +380,7 @@ struct NotificationsView: View {
                 Text("Optimal band: Charge ≥ 67 → 14–18, 34–66 → 10–14, < 34 → 4–10 (of 21).").font(.caption)
             }
         }.navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
     }
     private func bind(_ kp: WritableKeyPath<NotificationSettings, Bool>) -> Binding<Bool> {
         Binding(get: { model.settings.notifications[keyPath: kp] }, set: {
@@ -392,6 +404,7 @@ struct AboutView: View {
                 Text("Oura / Polar / Xiaomi sources, Apple Health import & write-back, WHOOP history offload decoding beyond the frame layer, 5/MG record versions 20/21/26, ECG, and the AI coach.")
             }
         }.navigationTitle("About")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -435,5 +448,6 @@ struct PersonalizeView: View {
             }
         }
         .navigationTitle("Personalize")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -28,8 +28,7 @@ struct TodayView: View {
         NavigationStack {
             ScrollView { content }
             .background { AmbientBackground(tint: (model.today?.charge.map(ChargeBand.of) ?? .yellow).gradient[0]) }
-            .navigationTitle("Today")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $detail) { MetricDetailView(kind: $0).environment(model) }
         }
     }

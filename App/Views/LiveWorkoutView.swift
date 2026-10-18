@@ -34,6 +34,7 @@ struct WorkoutStartSheet: View {
             }
             .padding()
             .navigationTitle("New workout")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
@@ -174,5 +175,6 @@ struct WorkoutDetailView: View {
             }
         }
         .navigationTitle(workout.sport)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
