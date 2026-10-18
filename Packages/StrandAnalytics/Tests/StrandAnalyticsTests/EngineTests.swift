@@ -86,6 +86,15 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(WindDownNudge.minuteOfDay(wakeMinute: 6 * 60).minute, 21 * 60 + 30)
     }
 
+    func testSnoozeRingsAgainAfterDelay() {
+        let fired = Date(timeIntervalSince1970: 1_760_000_000)               // an alarm that just went off
+        let again = SmartAlarm.snoozeInstant(firedAt: fired, delayMinutes: 4, count: 0)!
+        XCTAssertEqual(again.timeIntervalSince(fired), 240, accuracy: 60)    // ~4 min later, rounded up to a whole minute
+        XCTAssertGreaterThanOrEqual(again, fired.addingTimeInterval(240))
+        XCTAssertNotNil(SmartAlarm.snoozeInstant(firedAt: fired, delayMinutes: 4, count: 2))
+        XCTAssertNil(SmartAlarm.snoozeInstant(firedAt: fired, delayMinutes: 4, count: 3))   // max 3 re-arms
+    }
+
     func testFusionAndStreaks() {
         let r = FusionResolver.resolve(.steps, inputs: [(.noopComputed, 9000), (.appleHealth, 8800)])!
         XCTAssertEqual(r.winner.source, .appleHealth); XCTAssertEqual(r.agreement, .agree)

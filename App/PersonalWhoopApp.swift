@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct PersonalWhoopApp: App {
     @State private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     private func show(_ t: AppTab) -> Bool { !model.ui.hiddenTabs.contains(t.rawValue) }
 
@@ -16,6 +17,7 @@ struct PersonalWhoopApp: App {
                 MoreView().tabItem { Label("Settings", systemImage: "gearshape.fill") }
             }
             .environment(model)
+            .onChange(of: scenePhase) { _, phase in if phase == .active { model.stopSnooze() } }
             .task { if SnapshotExporter.requested { await SnapshotExporter.run(model: model) } }
             .tint(Color(red: 0.10, green: 0.75, blue: 0.65))
             .fullScreenCover(isPresented: Binding(get: { model.live != nil }, set: { _ in })) {

@@ -144,37 +144,10 @@ struct IllnessView: View {
 
 // MARK: - Alarms
 
-struct AlarmView: View {
+/// Mon–Sun picker. Empty weekday set = every day.
+struct WeekdayPicker: View {
     @Environment(AppModel.self) private var model
     var body: some View {
-        @Bindable var m = model
-        List {
-            Section {
-                Toggle("Strap wake alarm", isOn: Binding(get: { model.settings.alarm.enabled }, set: { model.settings.alarm.enabled = $0; apply() }))
-                DatePicker("Wake time", selection: Binding(
-                    get: { Calendar.current.date(bySettingHour: model.settings.alarm.wakeMinute / 60, minute: model.settings.alarm.wakeMinute % 60, second: 0, of: Date())! },
-                    set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); model.settings.alarm.wakeMinute = c.hour! * 60 + c.minute!; apply() }),
-                    displayedComponents: .hourAndMinute)
-                weekdayPicker
-                Toggle("Snooze (max 3 re-arms)", isOn: Binding(get: { model.settings.alarm.snooze }, set: { model.settings.alarm.snooze = $0 }))
-                Picker("Snooze delay", selection: Binding(get: { model.settings.alarm.snoozeMinutes }, set: { model.settings.alarm.snoozeMinutes = $0 })) {
-                    ForEach(SmartAlarm.snoozeDelays, id: \.self) { Text("\($0) min").tag($0) }
-                }
-                if let next = next() { LabeledContent("Next", value: next.formatted(date: .abbreviated, time: .shortened)) }
-            } footer: {
-                Text("The strap holds one absolute alarm and buzzes silently on your wrist — the app re-arms it after every fire, on connect and daily. A phone notification at the same instant is a backup, not a loud alarm. WHOOP 4.0 only; 5/MG arming is experimental.")
-            }
-            Section("Wind-down") {
-                Toggle("Evening nudge", isOn: Binding(get: { model.settings.alarm.windDown }, set: { model.settings.alarm.windDown = $0; apply() }))
-                let w = WindDownNudge.minuteOfDay(wakeMinute: model.settings.alarm.wakeMinute, needMinutes: Int(model.sleepNeedMin))
-                Text("Nudge at \(String(format: "%02d:%02d", w.minute / 60, w.minute % 60)) — wake time minus your sleep need minus 30 min.").font(.caption)
-            }
-        }
-        .navigationTitle("Alarms")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var weekdayPicker: some View {
         HStack {
             ForEach(Array(Calendar.current.veryShortWeekdaySymbols.enumerated()), id: \.offset) { i, s in
                 let wd = i + 1
@@ -185,37 +158,48 @@ struct AlarmView: View {
                         var set = model.settings.alarm.weekdays.isEmpty ? Set(1...7) : model.settings.alarm.weekdays
                         if set.contains(wd) { set.remove(wd) } else { set.insert(wd) }
                         model.settings.alarm.weekdays = set.count == 7 ? [] : set
-                        apply()
+                        model.applyAlarm()
                     }
             }
         }
     }
+}
 
-    private func next() -> Date? {
-        let a = model.settings.alarm
-        return a.enabled ? SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays) : nil
-    }
-
-    private func apply() {
-        let a = model.settings.alarm
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["alarm-backup", "wind-down"])
-        guard a.enabled || a.windDown else { model.ble.disarmAlarm(); return }
-        center.requestAuthorization(options: [.alert, .sound]) { ok, _ in
-            guard ok else { return }
-            if a.enabled, let d = SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays) {
-                let c = UNMutableNotificationContent(); c.title = "Wake up"; c.body = "Your alarm"; c.sound = .default
-                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: d)
-                center.add(UNNotificationRequest(identifier: "alarm-backup", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
-                Task { @MainActor in model.ble.armAlarm(at: d) }
+struct AlarmView: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        List {
+            Section {
+                Toggle("Strap wake alarm", isOn: Binding(get: { model.settings.alarm.enabled }, set: { model.settings.alarm.enabled = $0; model.applyAlarm() }))
+                DatePicker("Wake time", selection: Binding(
+                    get: { Calendar.current.date(bySettingHour: model.settings.alarm.wakeMinute / 60, minute: model.settings.alarm.wakeMinute % 60, second: 0, of: Date())! },
+                    set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); model.settings.alarm.wakeMinute = c.hour! * 60 + c.minute!; model.applyAlarm() }),
+                    displayedComponents: .hourAndMinute)
+                WeekdayPicker()
+                if let next = model.nextAlarm { LabeledContent(model.snoozeUntil != nil ? "Rings again" : "Next", value: next.formatted(date: .abbreviated, time: .shortened)) }
+            } footer: {
+                Text("The strap holds one absolute alarm and buzzes silently on your wrist — the app re-arms it after every fire, on connect and daily. A phone notification at the same instant is a backup, not a loud alarm. WHOOP 4.0 only; 5/MG arming is experimental.")
             }
-            if a.windDown {
-                let w = WindDownNudge.minuteOfDay(wakeMinute: a.wakeMinute, needMinutes: a.sleepNeedMinutes)
-                let c = UNMutableNotificationContent(); c.title = "Time to wind down"; c.body = "Dim the lights — bedtime is near."
-                var dc = DateComponents(); dc.hour = w.minute / 60; dc.minute = w.minute % 60
-                center.add(UNNotificationRequest(identifier: "wind-down", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: dc, repeats: true)))
+            Section {
+                Toggle("Snooze", isOn: Binding(get: { model.settings.alarm.snooze }, set: { model.settings.alarm.snooze = $0 }))
+                if model.settings.alarm.snooze {
+                    Picker("Ring again after", selection: Binding(get: { model.settings.alarm.snoozeMinutes }, set: { model.settings.alarm.snoozeMinutes = $0 })) {
+                        ForEach(SmartAlarm.snoozeDelays, id: \.self) { Text("\($0) min").tag($0) }
+                    }
+                }
+            } header: { Text("Snooze") } footer: {
+                Text(model.settings.alarm.snooze
+                     ? "If you don't stop it, the alarm rings again \(model.settings.alarm.snoozeMinutes) minutes after it goes off — up to \(SmartAlarm.maxSnoozes) more times. Double-tap the strap or open the app to stop."
+                     : "The alarm rings once and doesn't repeat.")
+            }
+            Section("Wind-down") {
+                Toggle("Evening nudge", isOn: Binding(get: { model.settings.alarm.windDown }, set: { model.settings.alarm.windDown = $0; model.applyAlarm() }))
+                let w = WindDownNudge.minuteOfDay(wakeMinute: model.settings.alarm.wakeMinute, needMinutes: Int(model.sleepNeedMin))
+                Text("Nudge at \(String(format: "%02d:%02d", w.minute / 60, w.minute % 60)) — wake time minus your sleep need minus 30 min.").font(.caption)
             }
         }
+        .navigationTitle("Alarms")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

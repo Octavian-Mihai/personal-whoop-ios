@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import StrandAnalytics
+import UserNotifications
 
 @Observable
 @MainActor
@@ -27,6 +28,9 @@ final class AppModel {
     var lastNight: SleepSession?
     var liveEffort: Double?
     var live: LiveWorkout?
+    /// Snooze chain: how many times the alarm has been re-armed this morning, and when it rings next.
+    var snoozeCount = 0
+    var snoozeUntil: Date?
 
     let ble = BLEManager()
     private let url: URL = {
@@ -45,6 +49,9 @@ final class AppModel {
         ble.onHR = { [weak self] bpm, rr in self?.ingestLive(bpm: bpm, rr: rr) }
         recompute()
         loadRawAsync()
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: .strapAlarmFired, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.alarmDidFire() } }
+        nc.addObserver(forName: .strapDoubleTap, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.stopSnooze() } }
         ble.connect()   // reconnect automatically so battery and live HR are there when the app opens
     }
 
@@ -229,6 +236,62 @@ final class AppModel {
         let now = Date().timeIntervalSince1970
         snapshot.liveHR.append(HRSample(t: now, bpm: Double(bpm)))
         if snapshot.liveHR.count > 20_000 { snapshot.liveHR.removeFirst(2_000) }
+    }
+
+    // MARK: alarm
+    /// The next time the alarm will ring: the pending snooze if there is one, else the next scheduled wake.
+    var nextAlarm: Date? {
+        if let s = snoozeUntil { return s }
+        let a = settings.alarm
+        return a.enabled ? SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays) : nil
+    }
+
+    /// Arms the strap + phone backup for the next wake time and schedules the wind-down nudge.
+    func applyAlarm() {
+        let a = settings.alarm
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ["alarm-backup", "wind-down"])
+        guard a.enabled || a.windDown else { ble.disarmAlarm(); return }
+        center.requestAuthorization(options: [.alert, .sound]) { ok, _ in
+            guard ok else { return }
+            Task { @MainActor in
+                if a.enabled, let d = SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays) {
+                    self.scheduleAlarmNotification(id: "alarm-backup", at: d, title: "Wake up", body: "Your alarm")
+                    self.ble.armAlarm(at: d)
+                }
+                if a.windDown {
+                    let w = WindDownNudge.minuteOfDay(wakeMinute: a.wakeMinute, needMinutes: a.sleepNeedMinutes)
+                    let c = UNMutableNotificationContent(); c.title = "Time to wind down"; c.body = "Dim the lights — bedtime is near."
+                    var dc = DateComponents(); dc.hour = w.minute / 60; dc.minute = w.minute % 60
+                    center.add(UNNotificationRequest(identifier: "wind-down", content: c, trigger: UNCalendarNotificationTrigger(dateMatching: dc, repeats: true)))
+                }
+            }
+        }
+    }
+
+    private func scheduleAlarmNotification(id: String, at d: Date, title: String, body: String) {
+        let c = UNMutableNotificationContent(); c.title = title; c.body = body; c.sound = .default
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: d)
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: c, trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))
+    }
+
+    /// The strap reported the alarm went off. With snooze on, ring again `snoozeMinutes` later (up to 3 more times).
+    func alarmDidFire() {
+        let a = settings.alarm
+        guard a.enabled, a.snooze,
+              let d = SmartAlarm.snoozeInstant(firedAt: Date(), delayMinutes: a.snoozeMinutes, count: snoozeCount) else { stopSnooze(); return }
+        snoozeCount += 1
+        snoozeUntil = d
+        scheduleAlarmNotification(id: "alarm-snooze", at: d, title: "Wake up", body: "Alarm ringing again")
+        ble.armAlarm(at: d)
+    }
+
+    /// Ends the snooze chain (double-tap on the strap, opening the app, or the Stop button) and re-arms the regular alarm.
+    func stopSnooze() {
+        guard snoozeUntil != nil || snoozeCount > 0 else { return }
+        snoozeCount = 0; snoozeUntil = nil
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["alarm-snooze"])
+        applyAlarm()
     }
 
     // MARK: actions

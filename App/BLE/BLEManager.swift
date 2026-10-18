@@ -212,7 +212,7 @@ extension BLEManager: CBCentralManagerDelegate, CBPeripheralDelegate {
             switch ev {
             case 9: wristOn = true
             case 10: wristOn = false
-            case 14: note("Double-tap")
+            case 14: note("Double-tap"); NotificationCenter.default.post(name: .strapDoubleTap, object: nil)
             case 57: note("Strap alarm executed"); NotificationCenter.default.post(name: .strapAlarmFired, object: nil)
             default: break
             }
@@ -229,4 +229,5 @@ extension BLEManager: CBCentralManagerDelegate, CBPeripheralDelegate {
 
 extension Notification.Name {
     static let strapAlarmFired = Notification.Name("strapAlarmFired")
+    static let strapDoubleTap = Notification.Name("strapDoubleTap")
 }

@@ -7,8 +7,8 @@ struct SleepView: View {
 
     var content: some View {
             VStack(spacing: 14) {
-                if let n = model.lastNight { hypnogram(n); metrics(n) }
-                else { Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
+                if let n = model.lastNight { hypnogram(n); alarmCard; metrics(n) }
+                else { alarmCard; Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
                 needDebt
                 stageTrend
                 Disclaimer()
@@ -28,6 +28,41 @@ struct SleepView: View {
             .background { AmbientBackground(tint: Palette.lavenderRich[0]) }
             .navigationTitle("Sleep")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var alarmCard: some View {
+        let a = model.settings.alarm
+        let next = model.nextAlarm
+        return Card(title: "Morning alarm", subtitle: nil, icon: "alarm.fill") {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Calendar.current.date(bySettingHour: a.wakeMinute / 60, minute: a.wakeMinute % 60, second: 0, of: Date())!, format: .dateTime.hour().minute())
+                        .font(.system(size: 36, weight: .bold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(a.enabled ? Color.primary : Color.secondary)
+                        .overlay {   // the big time is the picker: tap it to change the wake time
+                            DatePicker("", selection: Binding(
+                                get: { Calendar.current.date(bySettingHour: a.wakeMinute / 60, minute: a.wakeMinute % 60, second: 0, of: Date())! },
+                                set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); model.settings.alarm.wakeMinute = c.hour! * 60 + c.minute!; model.applyAlarm() }),
+                                displayedComponents: .hourAndMinute).labelsHidden().colorMultiply(.clear)
+                        }
+                    Text(next.map { model.snoozeUntil != nil ? "Rings again \($0.formatted(date: .omitted, time: .shortened))" : "Next: \($0.formatted(.dateTime.weekday(.abbreviated).hour().minute()))" } ?? "Off")
+                        .font(.caption).foregroundStyle(model.snoozeUntil != nil ? Palette.clay : .secondary)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(get: { a.enabled }, set: { model.settings.alarm.enabled = $0; model.applyAlarm() })).labelsHidden()
+            }
+            WeekdayPicker()
+            HStack {
+                Label(a.snooze ? "Rings again \(a.snoozeMinutes) min after, up to \(SmartAlarm.maxSnoozes)×" : "No snooze", systemImage: "arrow.clockwise")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if model.snoozeUntil != nil {
+                    Button("Stop") { model.stopSnooze() }.buttonStyle(.borderedProminent).controlSize(.small)
+                } else {
+                    NavigationLink("More options") { AlarmView() }.font(.caption.weight(.semibold))
+                }
+            }
         }
     }
 
