@@ -7,22 +7,31 @@ struct WorkoutsView: View {
     @Environment(AppModel.self) private var model
     @State private var showAdd = false
     @State private var showStart = false
+    private var compact: Bool { model.isCompact("workouts") }
 
     private func kind(_ sport: String) -> WorkoutKind { WorkoutKind(rawValue: sport) ?? .other }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    startHero
-                    weekSummary
-                    heatmapCard
-                    if !model.detected.isEmpty { detectedCard }
-                    loggedCard
-                    Disclaimer()
-                }
-                .padding(.horizontal, 16).padding(.bottom, 24)
+    var content: some View {
+            VStack(spacing: 16) {
+                startHero
+                if compact { weekStrip } else { weekSummary }
+                heatmapCard
+                if !model.detected.isEmpty { detectedCard }
+                loggedCard
+                Disclaimer()
             }
+            .padding(.horizontal, 16).padding(.bottom, 24)
+    }
+
+    var snapshot = false
+
+    var body: some View {
+        if snapshot { content } else { regular }
+    }
+
+    private var regular: some View {
+        NavigationStack {
+            ScrollView { content }
             .background { AmbientBackground(tint: Palette.peach[0]) }
             .navigationTitle("Workouts")
             .toolbar { Button { showAdd = true } label: { Image(systemName: "plus.circle.fill") } }
@@ -81,6 +90,31 @@ struct WorkoutsView: View {
         }
     }
 
+    private var weekStrip: some View {
+        let cutoff = Date().addingTimeInterval(-7 * 86400).timeIntervalSince1970
+        let w = model.snapshot.workouts.filter { $0.start >= cutoff }
+        let mins = w.reduce(0) { $0 + ($1.end - $1.start) / 60 }
+        let kcal = w.reduce(0) { $0 + ($1.kcal ?? 0) }
+        return Card {
+            HStack {
+                stripStat("figure.run", "\(w.count)", "workouts", Palette.peach[1])
+                Divider().frame(height: 28)
+                stripStat("clock.fill", String(format: "%.0f", mins), "min", Palette.sky[1])
+                Divider().frame(height: 28)
+                stripStat("flame.fill", String(format: "%.0f", kcal), "kcal", Palette.rose[1])
+            }
+            Text("Last 7 days").font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private func stripStat(_ icon: String, _ value: String, _ unit: String, _ tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).foregroundStyle(tint)
+            Text(value).font(.headline.monospacedDigit())
+            Text(unit).font(.caption).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity)
+    }
+
     private func summaryTile(_ icon: String, _ label: String, _ value: String, _ colors: [Color]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: icon).font(.subheadline.bold()).foregroundStyle(Palette.ink)
@@ -95,7 +129,7 @@ struct WorkoutsView: View {
     }
 
     private var heatmapCard: some View {
-        Card(title: "Activity", subtitle: "Last 13 weeks, by active calories", icon: "square.grid.3x3.fill") { heatmap }
+        Card(title: "Activity", subtitle: compact ? nil : "Last 13 weeks, by active calories", icon: "square.grid.3x3.fill") { heatmap }
     }
 
     private var detectedCard: some View {
@@ -161,16 +195,16 @@ struct WorkoutsView: View {
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .fill(LinearGradient(colors: Palette.peach, startPoint: .top, endPoint: .bottom))
                                 .opacity(v == nil ? 0 : [0.08, 0.3, 0.5, 0.75, 1][ActivityHeatmap.level(value: v ?? 0, daily: daily)])
-                                .frame(height: 18)
+                                .frame(height: compact ? 11 : 18)
                         }
                     }
                 }
             }
-            HStack(spacing: 4) {
+            if !compact { HStack(spacing: 4) {
                 Text("Less").font(.caption2).foregroundStyle(.secondary)
                 ForEach(0..<5, id: \.self) { i in RoundedRectangle(cornerRadius: 3).fill(Palette.peach[1].opacity([0.15, 0.35, 0.55, 0.75, 1][i])).frame(width: 12, height: 12) }
                 Text("More").font(.caption2).foregroundStyle(.secondary)
-            }.frame(maxWidth: .infinity, alignment: .trailing)
+            }.frame(maxWidth: .infinity, alignment: .trailing) }
         }
     }
 }

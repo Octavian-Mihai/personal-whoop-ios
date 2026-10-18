@@ -5,19 +5,29 @@ import StrandAnalytics
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @State private var detail: MetricKind?
+    @State private var allDrivers = false
+    private var compact: Bool { model.isCompact("today") }
+
+    var content: some View {
+            VStack(spacing: 16) {
+                header
+                ForEach(TodayCard.allCases.filter { !model.ui.hiddenCards.contains($0.rawValue) }) { card in
+                    cardView(card)
+                }
+                Disclaimer()
+            }
+            .padding(.horizontal, 16).padding(.bottom, 24)
+    }
+
+    var snapshot = false
 
     var body: some View {
+        if snapshot { content } else { regular }
+    }
+
+    private var regular: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    header
-                    ForEach(TodayCard.allCases.filter { !model.ui.hiddenCards.contains($0.rawValue) }) { card in
-                        cardView(card)
-                    }
-                    Disclaimer()
-                }
-                .padding(.horizontal, 16).padding(.bottom, 24)
-            }
+            ScrollView { content }
             .background { AmbientBackground(tint: (model.today?.charge.map(ChargeBand.of) ?? .yellow).gradient[0]) }
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
@@ -30,8 +40,8 @@ struct TodayView: View {
         let greet = h < 12 ? "Good morning" : (h < 18 ? "Good afternoon" : "Good evening")
         return HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(greet).font(.largeTitle.bold())
-                Text(Date().formatted(.dateTime.weekday(.wide).month().day())).foregroundStyle(.secondary)
+                Text(greet).font(compact ? .title2.bold() : .largeTitle.bold())
+                Text(Date().formatted(.dateTime.weekday(.wide).month().day())).font(compact ? .caption : .body).foregroundStyle(.secondary)
             }
             Spacer()
             if model.streak.current > 0 {
@@ -40,7 +50,7 @@ struct TodayView: View {
                     .background(Palette.peach[0].opacity(0.5), in: Capsule()).foregroundStyle(Palette.clay)
             }
         }
-        .padding(.top, 4)
+        .padding(.top, compact ? 0 : 4)
     }
 
     @ViewBuilder private func cardView(_ c: TodayCard) -> some View {
@@ -83,12 +93,13 @@ struct TodayView: View {
 
     private func series(_ kp: KeyPath<DailyMetric, Double?>) -> [Double] { model.days.suffix(14).compactMap { $0[keyPath: kp] } }
 
-    private var scoreCard: some View {
+    private var scoreCard: AnyView {
         let t = model.today
         let band = t?.charge.map(ChargeBand.of)
         let effort = t?.effort
         let b = model.baselines
-        return VStack(spacing: 14) {
+        if compact { return AnyView(compactScoreCard(t: t, band: band, effort: effort, b: b)) }
+        return AnyView(VStack(spacing: 14) {
             HeroCard(colors: (band ?? .yellow).gradient) {
                 HStack(spacing: 18) {
                     Ring(value: t?.charge, colors: [.white.opacity(0.85), .white], label: "Charge", unit: "%", size: 160, onDark: true, textColor: Color.white)
@@ -129,6 +140,37 @@ struct TodayView: View {
                            delta: t?.respiration.flatMap { v in b.map { v - $0.respiration.center } }, deltaFormat: "%+.1f", higherIsBetter: false, series: series(\.respiration), tint: Palette.sky[1])
                     .onTapGesture { detail = .respiration }
             }
+        })
+    }
+
+    private func compactScoreCard(t: DailyMetric?, band: ChargeBand?, effort: Double?, b: ChargeBaselines?) -> some View {
+        VStack(spacing: 12) {
+            HeroCard(colors: (band ?? .yellow).gradient) {
+                HStack(spacing: 14) {
+                    Ring(value: t?.charge, colors: [.white.opacity(0.85), .white], label: "Charge", unit: "%", size: 118, onDark: true, textColor: .white)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(band?.word ?? "Calibrating").font(.title3.bold()).foregroundStyle(.white)
+                        Text("\(ConfidenceTier.forNights(b?.hrv.count ?? 0).rawValue) · \(b?.hrv.count ?? 0) nights").font(.caption).foregroundStyle(.white.opacity(0.85))
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .contentShape(Rectangle()).onTapGesture { detail = .charge }
+            Card {
+                HStack(spacing: 10) {
+                    Ring(value: model.settings.effortOn21Scale ? effort.map { StrandAnalytics.StrainScorer.to21($0) / 21 * 100 } : effort,
+                         colors: Palette.skyRich, label: "Effort", size: 84).onTapGesture { detail = .effort }
+                    Ring(value: t?.rest, colors: Palette.lavenderRich, label: "Rest", unit: "%", size: 84).onTapGesture { detail = .rest }
+                    VStack(spacing: 8) {
+                        VitalRow(icon: "waveform.path.ecg", label: "HRV", value: t?.hrv.map { String(format: "%.0f ms", $0) } ?? "—",
+                                 delta: t?.hrv.flatMap { v in b.map { v - $0.hrv.center } }, tint: Palette.aqua[1]).onTapGesture { detail = .hrv }
+                        VitalRow(icon: "heart.fill", label: "Resting HR", value: t?.restingHR.map { String(format: "%.0f bpm", $0) } ?? "—",
+                                 delta: t?.restingHR.flatMap { v in b.map { v - $0.restingHR.center } }, higherIsBetter: false, tint: Palette.rose[1]).onTapGesture { detail = .restingHR }
+                        VitalRow(icon: "lungs.fill", label: "Respiration", value: t?.respiration.map { String(format: "%.1f /min", $0) } ?? "—",
+                                 delta: t?.respiration.flatMap { v in b.map { v - $0.respiration.center } }, deltaFormat: "%+.1f", higherIsBetter: false, tint: Palette.sky[1]).onTapGesture { detail = .respiration }
+                    }
+                }
+            }
         }
     }
 
@@ -151,14 +193,15 @@ struct TodayView: View {
     private func driversCard(_ r: ChargeResult) -> some View {
         let mode = model.ui.driverDisplay
         let mx = max(5, r.drivers.map { abs($0.points) }.max() ?? 5)
+        let shown = compact && !allDrivers ? Array(r.drivers.prefix(3)) : r.drivers
         return Card(title: "Charge drivers", subtitle: mode == .change ? "What each input added or removed" : "Today's value and its effect on Charge", icon: "bolt.fill") {
-            ForEach(r.drivers) { d in
+            ForEach(shown) { d in
                 let dv = driverValue(d.name)
                 VStack(spacing: 6) {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(d.name).font(.subheadline.weight(.medium))
-                            if mode != .change, let b = dv?.baseline { Text(b).font(.caption2).foregroundStyle(.secondary) }
+                            if mode != .change, !compact, let b = dv?.baseline { Text(b).font(.caption2).foregroundStyle(.secondary) }
                         }
                         Spacer()
                         if mode != .change, let v = dv?.value { Text(v).font(.subheadline.weight(.semibold).monospacedDigit()) }
@@ -174,10 +217,34 @@ struct TodayView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { detail = MetricKind(driverName: d.name) }
             }
+            if compact && r.drivers.count > 3 {
+                Button(allDrivers ? "Show fewer" : "Show all \(r.drivers.count)") { withAnimation { allDrivers.toggle() } }.font(.footnote.weight(.semibold))
+            }
         }
     }
 
-    private var liveCard: some View {
+    @ViewBuilder private var liveCard: some View {
+        if compact { liveStrip } else { liveFull }
+    }
+
+    private var liveStrip: some View {
+        Card {
+            HStack(spacing: 10) {
+                Image(systemName: "dot.radiowaves.left.and.right").foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Live").font(.subheadline.weight(.semibold))
+                    Text(model.ble.state.rawValue).font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(model.ble.heartRate.map(String.init) ?? "—").font(.title3.bold().monospacedDigit())
+                Button(model.ble.state == .connected ? "Disconnect" : "Connect") {
+                    model.ble.state == .connected ? model.ble.disconnect() : model.ble.connect()
+                }.buttonStyle(.bordered).controlSize(.small)
+            }
+        }
+    }
+
+    private var liveFull: some View {
         Card(title: "Live", subtitle: model.ble.state.rawValue, icon: "dot.radiowaves.left.and.right") {
             HStack(alignment: .firstTextBaseline) {
                 Text(model.ble.heartRate.map(String.init) ?? "—").font(.system(size: 44, weight: .bold, design: .rounded)).monospacedDigit()
@@ -198,7 +265,7 @@ struct TodayView: View {
     }
 
     private var stressCard: some View {
-        Card(title: "Stress today", subtitle: "Waking hours vs your own calm; masked while moving", icon: "brain.head.profile") {
+        Card(title: "Stress today", subtitle: compact ? nil : "Waking hours vs your own calm; masked while moving", icon: "brain.head.profile") {
             if model.stressHours.isEmpty { Text("Not enough heart-rate data yet").font(.footnote).foregroundStyle(.secondary) }
             else {
                 Chart(model.stressHours) { h in
@@ -207,7 +274,7 @@ struct TodayView: View {
                             .foregroundStyle(s >= 2 ? Palette.clay : Palette.aqua[1])
                     }
                 }
-                .chartYScale(domain: 0...3).frame(height: 120)
+                .chartYScale(domain: 0...3).frame(height: compact ? 70 : 120)
                 if DaytimeStress.sustainedHigh(model.stressHours) {
                     NavigationLink("Sustained high — try Breathe", destination: BreatheView())
                         .font(.footnote)
@@ -216,7 +283,29 @@ struct TodayView: View {
         }
     }
 
-    private var hydrationCard: some View {
+    @ViewBuilder private var hydrationCard: some View {
+        if compact { hydrationRow } else { hydrationFull }
+    }
+
+    private var hydrationRow: some View {
+        let total = model.hydrationToday, goal = model.hydrationGoal
+        return Card {
+            HStack(spacing: 10) {
+                Image(systemName: "drop.fill").foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(format: "Hydration  %.2f / %.1f L", Double(total) / 1000, Double(goal) / 1000)).font(.subheadline.weight(.medium))
+                    ProgressView(value: min(1, Double(total) / Double(goal)))
+                }
+                if SnapshotMode.on { Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(.tint) } else {
+                Menu {
+                    ForEach(HydrationGoal.quickLog, id: \.name) { q in Button("\(q.name) \(q.ml) ml") { model.logHydration(q.ml) } }
+                } label: { Image(systemName: "plus.circle.fill").font(.title2) }
+                }
+            }
+        }
+    }
+
+    private var hydrationFull: some View {
         Card(title: "Hydration", icon: "drop.fill") {
             let total = model.hydrationToday, goal = model.hydrationGoal
             ProgressView(value: min(1, Double(total) / Double(goal)))
@@ -229,7 +318,21 @@ struct TodayView: View {
         }
     }
 
-    private var readinessCard: some View {
+    @ViewBuilder private var readinessCard: some View {
+        if compact {
+            Card(title: "Readiness", icon: "checkmark.seal.fill") {
+                let chips = HStack(spacing: 8) {
+                    ForEach(model.readiness) { s in
+                        HStack(spacing: 5) { Circle().fill(color(s.flag)).frame(width: 8, height: 8); Text(s.name).font(.caption.weight(.medium)) }
+                            .padding(.horizontal, 10).padding(.vertical, 6).background(Color.gray.opacity(0.1), in: Capsule())
+                    }
+                }
+                if SnapshotMode.on { chips } else { ScrollView(.horizontal, showsIndicators: false) { chips } }
+            }
+        } else { readinessFull }
+    }
+
+    private var readinessFull: some View {
         Card(title: "Readiness signals", icon: "checkmark.seal.fill") {
             ForEach(model.readiness) { s in
                 HStack {

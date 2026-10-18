@@ -142,4 +142,6 @@ struct UISettings: Codable, Equatable {
     var hiddenTabs: Set<String> = []
     var hiddenMore: Set<String> = []
     var driverDisplay: DriverDisplay = .both
+    /// Screens shown in their compact layout (keys: today, sleep, workouts, trends, more).
+    var compact: Set<String> = []
 }

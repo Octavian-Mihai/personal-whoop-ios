@@ -5,30 +5,65 @@ import StrandAnalytics
 struct TrendsView: View {
     @Environment(AppModel.self) private var model
     @State private var range = 30
+    @State private var detail: MetricKind?
+    private var compact: Bool { model.isCompact("trends") }
 
     private var slice: [DailyMetric] { Array(model.days.suffix(range)) }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 14) {
-                    Picker("Range", selection: $range) {
-                        Text("30d").tag(30); Text("60d").tag(60)
-                    }.pickerStyle(.segmented)
+    var content: some View {
+            VStack(spacing: 14) {
+                Picker("Range", selection: $range) {
+                    Text("30d").tag(30); Text("60d").tag(60)
+                }.pickerStyle(.segmented)
 
+                if compact { tileGrid } else {
                     line("Charge", \.charge, .green, "charge")
                     line("HRV (ms)", \.hrv, .teal, "hrv")
                     line("Resting HR (bpm)", \.restingHR, .red, "rhr")
                     line("Effort", \.effort, .blue, "effort")
                     line("Rest", \.rest, .purple, "")
-                    loadCard
-                    digestCard
-                    Disclaimer()
                 }
-                .padding(.horizontal, 16).padding(.bottom, 24)
+                loadCard
+                digestCard
+                Disclaimer()
             }
+            .padding(.horizontal, 16).padding(.bottom, 24)
+    }
+
+    var snapshot = false
+
+    var body: some View {
+        if snapshot { content } else { regular }
+    }
+
+    private var regular: some View {
+        NavigationStack {
+            ScrollView { content }
             .background { AmbientBackground(tint: Palette.mint[0]) }
             .navigationTitle("Trends")
+            .sheet(item: $detail) { MetricDetailView(kind: $0).environment(model) }
+        }
+    }
+
+    private var tileGrid: some View {
+        let kinds: [MetricKind] = [.charge, .rest, .effort, .hrv, .restingHR, .respiration]
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            ForEach(kinds) { k in
+                let vals = slice.compactMap { $0[keyPath: k.keyPath] }
+                let s = Summary.of(vals)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 5) {
+                        Image(systemName: k.icon).font(.caption2).foregroundStyle(k.colors[1])
+                        Text(k.title.replacingOccurrences(of: "Heart-rate variability", with: "HRV").replacingOccurrences(of: "Resting heart rate", with: "Resting HR")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Text(s.map { String(format: k == .respiration ? "%.1f" : "%.0f", $0.mean) + k.unit } ?? "—").font(.title3.weight(.semibold).monospacedDigit())
+                    Sparkline(values: vals, color: k.colors[1]).frame(height: 34)
+                }
+                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.cardBG, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+                .contentShape(Rectangle()).onTapGesture { detail = k }
+            }
         }
     }
 

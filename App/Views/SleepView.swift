@@ -4,19 +4,29 @@ import StrandAnalytics
 
 struct SleepView: View {
     @Environment(AppModel.self) private var model
+    @State private var showMore = false
+    private var compact: Bool { model.isCompact("sleep") }
+
+    var content: some View {
+            VStack(spacing: 14) {
+                if let n = model.lastNight { hypnogram(n); metrics(n) }
+                else { Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
+                if !compact { needDebt }
+                stageTrend
+                Disclaimer()
+            }
+            .padding(.horizontal, 16).padding(.bottom, 24)
+    }
+
+    var snapshot = false
 
     var body: some View {
+        if snapshot { content } else { regular }
+    }
+
+    private var regular: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 14) {
-                    if let n = model.lastNight { hypnogram(n); metrics(n) }
-                    else { Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
-                    needDebt
-                    stageTrend
-                    Disclaimer()
-                }
-                .padding(.horizontal, 16).padding(.bottom, 24)
-            }
+            ScrollView { content }
             .background { AmbientBackground(tint: Palette.lavenderRich[0]) }
             .navigationTitle("Sleep")
         }
@@ -28,16 +38,16 @@ struct SleepView: View {
     private func hypnogram(_ n: SleepSession) -> some View {
         let m = HypnogramMetrics(session: n)
         return HeroCard(colors: [Color(red: 0.10, green: 0.13, blue: 0.32), Color(red: 0.30, green: 0.22, blue: 0.58)], stars: true, decor: false) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: compact ? 8 : 12) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
                         Label("Last night", systemImage: "moon.stars.fill").font(.subheadline).foregroundStyle(.white.opacity(0.8))
-                        Text(fmtDuration(m.tst)).font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                        Text(fmtDuration(m.tst)).font(.system(size: compact ? 30 : 40, weight: .bold, design: .rounded)).foregroundStyle(.white)
                         Text("\(fmtClock(n.start)) – \(fmtClock(n.end)) · \(String(format: "%.0f%%", m.efficiency * 100)) efficient")
                             .font(.caption).foregroundStyle(.white.opacity(0.75))
                     }
                     Spacer()
-                    Ring(value: model.today?.rest, colors: [Palette.lavender[0], .white], label: "Rest", unit: "%", size: 96, onDark: true)
+                    Ring(value: model.today?.rest, colors: [Palette.lavender[0], .white], label: "Rest", unit: "%", size: compact ? 76 : 96, onDark: true)
                 }
                 Chart(Array(n.segments.enumerated()), id: \.offset) { _, s in
                     RectangleMark(xStart: .value("s", Date(timeIntervalSince1970: s.start)), xEnd: .value("e", Date(timeIntervalSince1970: s.end)),
@@ -50,7 +60,7 @@ struct SleepView: View {
                     }
                 }
                 .chartXAxis { AxisMarks { _ in AxisValueLabel().foregroundStyle(.white.opacity(0.7)) } }
-                .chartYScale(domain: 0...4).frame(height: 150)
+                .chartYScale(domain: 0...4).frame(height: compact ? 90 : 150)
                 HStack(spacing: 14) {
                     ForEach([SleepStage.awake, .rem, .light, .deep], id: \.self) { st in
                         HStack(spacing: 5) { Circle().fill(color(st)).frame(width: 8, height: 8); Text(st.rawValue.capitalized).font(.caption2).foregroundStyle(.white.opacity(0.8)) }
@@ -65,7 +75,7 @@ struct SleepView: View {
         let rest = model.today?.rest
         return Card(title: "Night metrics") {
             HStack {
-                Stat(label: "Rest", value: rest.map { String(format: "%.0f%%", $0) } ?? "—")
+                if !compact { Stat(label: "Rest", value: rest.map { String(format: "%.0f%%", $0) } ?? "—") }
                 Stat(label: "Asleep", value: fmtDuration(m.tst))
                 Stat(label: "Efficiency", value: String(format: "%.0f%%", m.efficiency * 100))
             }
@@ -74,7 +84,16 @@ struct SleepView: View {
                 Stat(label: "REM", value: fmtDuration(n.minutes(.rem)), sub: pct(n.minutes(.rem), m.tst))
                 Stat(label: "Light", value: fmtDuration(n.minutes(.light)), sub: pct(n.minutes(.light), m.tst))
             }
-            Divider()
+            if compact {
+                DisclosureGroup(isExpanded: $showMore) { moreMetrics(n, m) } label: { Text("More night details").font(.footnote.weight(.semibold)) }
+            } else {
+                Divider(); moreMetrics(n, m)
+            }
+        }
+    }
+
+    @ViewBuilder private func moreMetrics(_ n: SleepSession, _ m: HypnogramMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Stat(label: "Latency", value: String(format: "%.0f min", m.sol))
                 Stat(label: "REM latency", value: m.remLatency.map { String(format: "%.0f min", $0) } ?? "—")
@@ -86,6 +105,13 @@ struct SleepView: View {
                 Stat(label: "Night HRV", value: n.hrv.map { String(format: "%.0f ms", $0) } ?? "—")
             }
             Text("Deep vs light is the weakest staging output — treat it as an estimate.").font(.caption2).foregroundStyle(.secondary)
+            if compact {
+                Divider()
+                HStack {
+                    Stat(label: "Need", value: fmtDuration(model.sleepNeedMin))
+                    Stat(label: "Debt", value: model.sleepDebtMin == 0 ? "Balanced" : fmtDuration(model.sleepDebtMin))
+                }
+            }
         }
     }
 
@@ -111,7 +137,7 @@ struct SleepView: View {
                 }
             }
             .chartForegroundStyleScale(["Deep": Color.indigo, "REM": Color.purple, "Light": Color.blue])
-            .frame(height: 180)
+            .frame(height: compact ? 110 : 180)
         }
     }
 }

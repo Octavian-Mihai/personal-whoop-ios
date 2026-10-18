@@ -8,6 +8,9 @@ extension Color {
     static let cardBG = Color(.secondarySystemGroupedBackground)
 }
 
+/// Set by the snapshot exporter so animated gauges render at their final value.
+enum SnapshotMode { nonisolated(unsafe) static var on = false }
+
 enum Palette {
     static let ink = Color(red: 0.17, green: 0.20, blue: 0.30)
     static let mint = [Color(red: 0.74, green: 0.92, blue: 0.82), Color(red: 0.55, green: 0.82, blue: 0.70)]
@@ -72,9 +75,11 @@ struct Ring: View {
 
     init(value: Double?, color: Color, label: String, unit: String = "", size: CGFloat = 96) {
         self.value = value; self.colors = [color.opacity(0.7), color]; self.label = label; self.unit = unit; self.size = size
+        _shown = State(initialValue: SnapshotMode.on ? (value ?? 0) : 0)
     }
     init(value: Double?, colors: [Color], label: String, unit: String = "", size: CGFloat = 96, onDark: Bool = false, textColor: Color? = nil) {
         self.value = value; self.colors = colors; self.label = label; self.unit = unit; self.size = size; self.onDark = onDark; self.textColor = textColor
+        _shown = State(initialValue: SnapshotMode.on ? (value ?? 0) : 0)
     }
 
     var body: some View {
@@ -262,5 +267,32 @@ struct Starfield: View {
                 ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: d, height: d)), with: .color(.white.opacity(0.25 + r() * 0.5)))
             }
         }
+    }
+}
+
+/// One-line vital: icon, value, delta vs norm. Used in compact layouts.
+struct VitalRow: View {
+    var icon: String
+    var label: String
+    var value: String
+    var delta: Double?
+    var deltaFormat: String = "%+.0f"
+    var higherIsBetter = true
+    var tint: Color
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon).font(.caption).foregroundStyle(tint).frame(width: 16)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(label).font(.caption2).foregroundStyle(.secondary)
+                Text(value).font(.subheadline.weight(.semibold).monospacedDigit())
+            }
+            Spacer(minLength: 2)
+            if let d = delta, abs(d) > 0.0001 {
+                let good = (d > 0) == higherIsBetter
+                Text(String(format: deltaFormat, d)).font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(good ? Palette.sage : Palette.clay)
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
