@@ -27,6 +27,7 @@ struct TrendsView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
+            .background(Color.screenBG)
             .navigationTitle("Trends")
         }
     }

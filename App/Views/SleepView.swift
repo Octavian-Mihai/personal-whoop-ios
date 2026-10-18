@@ -17,6 +17,7 @@ struct SleepView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
+            .background(Color.screenBG)
             .navigationTitle("Sleep")
         }
     }
@@ -25,7 +26,7 @@ struct SleepView: View {
     private func color(_ s: SleepStage) -> Color { [SleepStage.awake: .orange, .rem: .purple, .light: .blue, .deep: .indigo][s] ?? .gray }
 
     private func hypnogram(_ n: SleepSession) -> some View {
-        Card(title: "Last night", subtitle: "\(fmtClock(n.start)) – \(fmtClock(n.end))") {
+        Card(title: "Last night", subtitle: "\(fmtClock(n.start)) – \(fmtClock(n.end))", icon: "moon.stars.fill") {
             Chart(Array(n.segments.enumerated()), id: \.offset) { _, s in
                 RectangleMark(xStart: .value("s", Date(timeIntervalSince1970: s.start)), xEnd: .value("e", Date(timeIntervalSince1970: s.end)),
                               yStart: .value("l", level(s.stage)), yEnd: .value("h", level(s.stage) + 0.8))
@@ -37,6 +38,11 @@ struct SleepView: View {
                 }
             }
             .chartYScale(domain: 0...4).frame(height: 170)
+            HStack(spacing: 14) {
+                ForEach([SleepStage.awake, .rem, .light, .deep], id: \.self) { st in
+                    HStack(spacing: 5) { Circle().fill(color(st)).frame(width: 8, height: 8); Text(st.rawValue.capitalized).font(.caption2).foregroundStyle(.secondary) }
+                }
+            }
         }
     }
 

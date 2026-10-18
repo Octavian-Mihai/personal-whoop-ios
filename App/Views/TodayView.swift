@@ -8,7 +8,8 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: 16) {
+                    header
                     ForEach(TodayCard.allCases.filter { !model.ui.hiddenCards.contains($0.rawValue) }) { card in
                         cardView(card)
                     }
@@ -16,8 +17,28 @@ struct TodayView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
+            .background(Color.screenBG)
             .navigationTitle("Today")
+            .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private var header: some View {
+        let h = Calendar.current.component(.hour, from: Date())
+        let greet = h < 12 ? "Good morning" : (h < 18 ? "Good afternoon" : "Good evening")
+        return HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(greet).font(.largeTitle.bold())
+                Text(Date().formatted(.dateTime.weekday(.wide).month().day())).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if model.streak.current > 0 {
+                Label("\(model.streak.current)", systemImage: "flame.fill").font(.subheadline.bold())
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Color.orange.opacity(0.15), in: Capsule()).foregroundStyle(.orange)
+            }
+        }
+        .padding(.top, 4)
     }
 
     @ViewBuilder private func cardView(_ c: TodayCard) -> some View {
@@ -51,26 +72,43 @@ struct TodayView: View {
         }
     }
 
+    private func series(_ kp: KeyPath<DailyMetric, Double?>) -> [Double] { model.days.suffix(14).compactMap { $0[keyPath: kp] } }
+
     private var scoreCard: some View {
         let t = model.today
-        let band = t?.charge.map(ChargeBand.of) ?? .yellow
+        let band = t?.charge.map(ChargeBand.of)
         let effort = t?.effort
-        return Card {
-            HStack(alignment: .top, spacing: 0) {
-                Ring(value: t?.charge, color: .band(band), label: t?.charge == nil ? "Charge · Calibrating" : "Charge", unit: "%").frame(maxWidth: .infinity)
-                Ring(value: model.settings.effortOn21Scale ? effort.map { StrainScorer.to21($0) / 21 * 100 } : effort, color: .blue, label: "Effort", unit: model.settings.effortOn21Scale ? "of 21" : "").frame(maxWidth: .infinity)
-                Ring(value: t?.rest, color: .purple, label: "Rest", unit: "%").frame(maxWidth: .infinity)
+        let b = model.baselines
+        return VStack(spacing: 14) {
+            Card {
+                HStack(spacing: 16) {
+                    Ring(value: t?.charge, colors: (band ?? .yellow).gradient, label: "", unit: "Charge", size: 148)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(band?.word ?? "Calibrating").font(.title3.bold())
+                        Text(t?.charge == nil ? "Need a few more nights to learn your baseline." : "Based on HRV, resting HR, sleep and recent strain, vs your own normal.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            TierBadge(tier: ConfidenceTier.forNights(b?.hrv.count ?? 0))
+                            Text("\(b?.hrv.count ?? 0) nights").font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Divider()
+                HStack(alignment: .top, spacing: 0) {
+                    Ring(value: model.settings.effortOn21Scale ? effort.map { StrainScorer.to21($0) / 21 * 100 } : effort,
+                         colors: [Color(red: 0.35, green: 0.65, blue: 1), Color(red: 0.15, green: 0.35, blue: 0.95)],
+                         label: "Effort", unit: model.settings.effortOn21Scale ? "of 21" : "", size: 84).frame(maxWidth: .infinity)
+                    Ring(value: t?.rest, colors: [Color(red: 0.75, green: 0.5, blue: 1), Color(red: 0.55, green: 0.25, blue: 0.9)],
+                         label: "Rest", unit: "%", size: 84).frame(maxWidth: .infinity)
+                }
             }
-            HStack {
-                Stat(label: "HRV", value: t?.hrv.map { String(format: "%.0f ms", $0) } ?? "—")
-                Stat(label: "Resting HR", value: t?.restingHR.map { String(format: "%.0f bpm", $0) } ?? "—")
-                Stat(label: "Respiration", value: t?.respiration.map { String(format: "%.1f /min", $0) } ?? "—")
-            }
-            HStack {
-                TierBadge(tier: ConfidenceTier.forNights(model.baselines?.hrv.count ?? 0))
-                Text("\(model.baselines?.hrv.count ?? 0) nights of baseline").font(.caption2).foregroundStyle(.secondary)
-                Spacer()
-                if model.streak.current > 0 { Label("\(model.streak.current)-day streak", systemImage: "flame.fill").font(.caption).foregroundStyle(.orange) }
+            HStack(spacing: 10) {
+                MetricChip(icon: "waveform.path.ecg", label: "HRV", value: t?.hrv.map { String(format: "%.0f ms", $0) } ?? "—",
+                           delta: t?.hrv.flatMap { v in b.map { v - $0.hrv.center } }, series: series(\.hrv), tint: .teal)
+                MetricChip(icon: "heart.fill", label: "Resting HR", value: t?.restingHR.map { String(format: "%.0f bpm", $0) } ?? "—",
+                           delta: t?.restingHR.flatMap { v in b.map { v - $0.restingHR.center } }, higherIsBetter: false, series: series(\.restingHR), tint: .red)
+                MetricChip(icon: "lungs.fill", label: "Resp.", value: t?.respiration.map { String(format: "%.1f", $0) } ?? "—",
+                           delta: t?.respiration.flatMap { v in b.map { v - $0.respiration.center } }, deltaFormat: "%+.1f", higherIsBetter: false, series: series(\.respiration), tint: .cyan)
             }
         }
     }
@@ -93,28 +131,33 @@ struct TodayView: View {
 
     private func driversCard(_ r: ChargeResult) -> some View {
         let mode = model.ui.driverDisplay
-        return Card(title: "Charge drivers", subtitle: mode == .change ? "Points each input added or removed" : "Today's value and what it did to Charge") {
+        let mx = max(5, r.drivers.map { abs($0.points) }.max() ?? 5)
+        return Card(title: "Charge drivers", subtitle: mode == .change ? "What each input added or removed" : "Today's value and its effect on Charge", icon: "bolt.fill") {
             ForEach(r.drivers) { d in
                 let dv = driverValue(d.name)
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(d.name).font(.subheadline)
-                        if mode != .change, let b = dv?.baseline { Text(b).font(.caption2).foregroundStyle(.secondary) }
+                VStack(spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(d.name).font(.subheadline.weight(.medium))
+                            if mode != .change, let b = dv?.baseline { Text(b).font(.caption2).foregroundStyle(.secondary) }
+                        }
+                        Spacer()
+                        if mode != .change, let v = dv?.value { Text(v).font(.subheadline.weight(.semibold).monospacedDigit()) }
+                        if mode != .value {
+                            Text(String(format: "%+.1f", d.points)).font(.caption.weight(.bold).monospacedDigit())
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background((d.points >= 0 ? Color.green : Color.orange).opacity(0.15), in: Capsule())
+                                .foregroundStyle(d.points >= 0 ? .green : .orange)
+                        }
                     }
-                    Spacer()
-                    if mode != .change, let v = dv?.value { Text(v).font(.subheadline.weight(.semibold).monospacedDigit()) }
-                    if mode != .value {
-                        Text(String(format: "%+.1f", d.points)).font(.subheadline.monospacedDigit())
-                            .foregroundStyle(d.points >= 0 ? .green : .red)
-                            .frame(minWidth: 48, alignment: .trailing)
-                    }
+                    if mode != .value { DriverBar(points: d.points, maxMagnitude: mx) }
                 }
             }
         }
     }
 
     private var liveCard: some View {
-        Card(title: "Live", subtitle: model.ble.state.rawValue) {
+        Card(title: "Live", subtitle: model.ble.state.rawValue, icon: "dot.radiowaves.left.and.right") {
             HStack(alignment: .firstTextBaseline) {
                 Text(model.ble.heartRate.map(String.init) ?? "—").font(.system(size: 44, weight: .bold, design: .rounded)).monospacedDigit()
                 Text("bpm").foregroundStyle(.secondary)
@@ -128,13 +171,13 @@ struct TodayView: View {
     }
 
     private func forecastCard(_ f: ChargeForecast) -> some View {
-        Card(title: "Tomorrow's Charge", subtitle: "Evening estimate from known levers, not a measurement") {
+        Card(title: "Tomorrow's Charge", subtitle: "Evening estimate from known levers, not a measurement", icon: "sunrise.fill") {
             Text(String(format: "%.0f ± %.0f", f.value, f.band)).font(.title2.bold())
         }
     }
 
     private var stressCard: some View {
-        Card(title: "Stress today", subtitle: "Waking hours vs your own calm; masked while moving") {
+        Card(title: "Stress today", subtitle: "Waking hours vs your own calm; masked while moving", icon: "brain.head.profile") {
             if model.stressHours.isEmpty { Text("Not enough heart-rate data yet").font(.footnote).foregroundStyle(.secondary) }
             else {
                 Chart(model.stressHours) { h in
@@ -153,7 +196,7 @@ struct TodayView: View {
     }
 
     private var hydrationCard: some View {
-        Card(title: "Hydration") {
+        Card(title: "Hydration", icon: "drop.fill") {
             let total = model.hydrationToday, goal = model.hydrationGoal
             ProgressView(value: min(1, Double(total) / Double(goal)))
             Text(String(format: "%.2f / %.1f L", Double(total) / 1000, Double(goal) / 1000)).font(.footnote)
@@ -166,7 +209,7 @@ struct TodayView: View {
     }
 
     private var readinessCard: some View {
-        Card(title: "Readiness signals") {
+        Card(title: "Readiness signals", icon: "checkmark.seal.fill") {
             ForEach(model.readiness) { s in
                 HStack {
                     Circle().fill(color(s.flag)).frame(width: 10, height: 10)

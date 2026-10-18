@@ -17,6 +17,7 @@ struct PersonalWhoopApp: App {
                 MoreView().tabItem { Label("More", systemImage: "ellipsis.circle") }
             }
             .environment(model)
+            .tint(Color(red: 0.10, green: 0.75, blue: 0.65))
             .fullScreenCover(isPresented: Binding(get: { model.live != nil }, set: { _ in })) {
                 if let l = model.live { LiveWorkoutView(live: l).environment(model) }
             }
