@@ -9,13 +9,11 @@ struct SnapshotEntry: TimelineEntry {
 struct SnapshotProvider: TimelineProvider {
     func placeholder(in context: Context) -> SnapshotEntry { SnapshotEntry(date: Date(), snap: .sample) }
     func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
-        completion(SnapshotEntry(date: Date(), snap: context.isPreview ? .sample : (WidgetSnapshot.load() ?? .sample)))
+        completion(SnapshotEntry(date: Date(), snap: context.isPreview ? .sample : (WidgetSnapshot.load() ?? .empty)))
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
-        let snap = WidgetSnapshot.load() ?? WidgetSnapshot(charge: nil, effort: nil, rest: nil, hrv: nil, restingHR: nil, batteryPercent: nil,
-                                                          batteryAt: nil, nextAlarm: nil, updated: Date(), isDemo: false)
         // The app pushes fresh values and reloads timelines; this is only a fallback refresh.
-        completion(Timeline(entries: [SnapshotEntry(date: Date(), snap: snap)], policy: .after(Date().addingTimeInterval(15 * 60))))
+        completion(Timeline(entries: [SnapshotEntry(date: Date(), snap: WidgetSnapshot.load() ?? .empty)], policy: .after(Date().addingTimeInterval(15 * 60))))
     }
 }
 
@@ -24,9 +22,10 @@ struct TodayWidget: Widget {
         StaticConfiguration(kind: "TodayWidget", provider: SnapshotProvider()) { entry in
             TodayWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("Charge · Effort · Rest")
-        .description("Today's scores and your strap battery.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
+        .configurationDisplayName("Today")
+        .description("Charge, Effort, Rest, vitals, 7-day trend, sleep and strap battery.")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryCircular, .accessoryRectangular, .accessoryInline])
+        .contentMarginsDisabled()
     }
 }
 
@@ -36,10 +35,33 @@ struct TodayWidgetEntryView: View {
     var body: some View {
         TodayWidgetContent(snap: entry.snap, family: family)
             .containerBackground(for: .widget) {
-                if family == .systemSmall || family == .systemMedium {
-                    LinearGradient(colors: WTheme.mint, startPoint: .topLeading, endPoint: .bottomTrailing)
-                } else { Color.clear }
+                switch family {
+                case .systemSmall, .systemMedium: LinearGradient(colors: WTheme.mint, startPoint: .topLeading, endPoint: .bottomTrailing)
+                case .systemLarge: Color(.systemBackground)
+                default: Color.clear
+                }
             }
+    }
+}
+
+struct SleepWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "SleepWidget", provider: SnapshotProvider()) { entry in
+            SleepWidgetEntryView(entry: entry)
+        }
+        .configurationDisplayName("Sleep")
+        .description("Last night's sleep, stages, Rest, sleep debt and your next alarm.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+        .contentMarginsDisabled()
+    }
+}
+
+struct SleepWidgetEntryView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: SnapshotEntry
+    var body: some View {
+        SleepWidgetContent(snap: entry.snap, family: family)
+            .containerBackground(for: .widget) { LinearGradient(colors: WTheme.indigo, startPoint: .topLeading, endPoint: .bottomTrailing) }
     }
 }
 
@@ -49,8 +71,9 @@ struct StrapWidget: Widget {
             StrapWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Strap")
-        .description("Strap battery and your next alarm.")
+        .description("Battery, heart rate, next alarm and water.")
         .supportedFamilies([.systemSmall, .accessoryCircular])
+        .contentMarginsDisabled()
     }
 }
 
@@ -67,6 +90,7 @@ struct StrapWidgetEntryView: View {
 struct PersonalWhoopWidgets: WidgetBundle {
     var body: some Widget {
         TodayWidget()
+        SleepWidget()
         StrapWidget()
     }
 }

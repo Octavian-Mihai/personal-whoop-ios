@@ -31,6 +31,7 @@ final class AppModel {
     var live: LiveWorkout?
     /// Snooze chain: how many times the alarm has been re-armed this morning, and when it rings next.
     var snoozeCount = 0
+    private var lastWidgetSync = Date.distantPast
     // automations
     private var zoneWindow: [Double] = []
     private var lastZone = 0
@@ -285,6 +286,7 @@ final class AppModel {
         let now = Date().timeIntervalSince1970
         snapshot.liveHR.append(HRSample(t: now, bpm: Double(bpm)))
         if snapshot.liveHR.count > 20_000 { snapshot.liveHR.removeFirst(2_000) }
+        if Date().timeIntervalSince(lastWidgetSync) > 300 { syncWidgets() }   // keep widgets' live HR reasonably fresh without burning reload budget
         guard live == nil else { return }          // a tracked workout has its own coach
         runAutomations(bpm: Double(bpm), rr: rr, now: now)
     }
@@ -338,10 +340,22 @@ final class AppModel {
     /// Shares today's numbers with the home/lock-screen widgets and asks them to refresh.
     func syncWidgets() {
         let t = today
-        let battery = ble.batteryPercent ?? ble.lastBattery?.percent
-        WidgetSnapshot(charge: t?.charge, effort: t?.effort, rest: t?.rest, hrv: t?.hrv, restingHR: t?.restingHR,
-                       batteryPercent: battery, batteryAt: ble.lastBattery?.at, nextAlarm: nextAlarm,
-                       updated: Date(), isDemo: settings.useDemoData).save()
+        let last7 = Array(days.suffix(7))
+        let n = lastNight
+        WidgetSnapshot(
+            charge: t?.charge, effort: t?.effort, rest: t?.rest, forecast: forecast?.value, streak: streak.current,
+            hrv: t?.hrv, restingHR: t?.restingHR, respiration: t?.respiration, stress: t?.stress,
+            steps: t?.steps, kcal: t?.kcal,
+            chargeSeries: last7.map(\.charge), effortSeries: last7.map(\.effort),
+            asleepMin: n?.asleepMinutes ?? t?.asleepMin, deepMin: n?.minutes(.deep) ?? t?.deepMin, remMin: n?.minutes(.rem) ?? t?.remMin,
+            lightMin: n?.minutes(.light) ?? t?.lightMin, awakeMin: n?.minutes(.awake) ?? t?.awakeMin,
+            sleepNeedMin: sleepNeedMin, sleepDebtMin: sleepDebtMin,
+            sleepStart: n.map { Date(timeIntervalSince1970: $0.start) }, sleepEnd: n.map { Date(timeIntervalSince1970: $0.end) },
+            hydrationML: hydrationToday, hydrationGoalML: hydrationGoal,
+            batteryPercent: ble.batteryPercent ?? ble.lastBattery?.percent, batteryAt: ble.lastBattery?.at,
+            liveHR: ble.heartRate, liveHRAt: ble.heartRate == nil ? nil : Date(), nextAlarm: nextAlarm,
+            updated: Date(), isDemo: settings.useDemoData).save()
+        lastWidgetSync = Date()
         WidgetCenter.shared.reloadAllTimelines()
     }
 
