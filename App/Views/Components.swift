@@ -3,19 +3,26 @@ import Charts
 import StrandAnalytics
 
 extension Color {
-    static func band(_ b: ChargeBand) -> Color { b == .green ? .green : (b == .yellow ? .yellow : .red) }
+    static func band(_ b: ChargeBand) -> Color { b.gradient[1] }
     static let screenBG = Color(.systemGroupedBackground)
     static let cardBG = Color(.secondarySystemGroupedBackground)
 }
 
+enum Palette {
+    static let ink = Color(red: 0.17, green: 0.20, blue: 0.30)
+    static let mint = [Color(red: 0.74, green: 0.92, blue: 0.82), Color(red: 0.55, green: 0.82, blue: 0.70)]
+    static let butter = [Color(red: 0.99, green: 0.92, blue: 0.70), Color(red: 0.96, green: 0.80, blue: 0.58)]
+    static let rose = [Color(red: 0.98, green: 0.78, blue: 0.78), Color(red: 0.92, green: 0.62, blue: 0.68)]
+    static let sky = [Color(red: 0.76, green: 0.86, blue: 0.98), Color(red: 0.58, green: 0.72, blue: 0.93)]
+    static let lavender = [Color(red: 0.84, green: 0.78, blue: 0.97), Color(red: 0.69, green: 0.62, blue: 0.90)]
+    static let peach = [Color(red: 0.99, green: 0.82, blue: 0.70), Color(red: 0.95, green: 0.68, blue: 0.60)]
+    static let aqua = [Color(red: 0.74, green: 0.92, blue: 0.93), Color(red: 0.55, green: 0.80, blue: 0.84)]
+    static let sage = Color(red: 0.42, green: 0.70, blue: 0.58)
+    static let clay = Color(red: 0.90, green: 0.55, blue: 0.45)
+}
+
 extension ChargeBand {
-    var gradient: [Color] {
-        switch self {
-        case .green: return [Color(red: 0.20, green: 0.85, blue: 0.55), Color(red: 0.10, green: 0.70, blue: 0.35)]
-        case .yellow: return [Color(red: 1.0, green: 0.85, blue: 0.25), Color(red: 0.95, green: 0.65, blue: 0.10)]
-        case .red: return [Color(red: 1.0, green: 0.45, blue: 0.40), Color(red: 0.85, green: 0.20, blue: 0.25)]
-        }
-    }
+    var gradient: [Color] { self == .green ? Palette.mint : (self == .yellow ? Palette.butter : Palette.rose) }
     var word: String { self == .green ? "Primed" : (self == .yellow ? "Steady" : "Take it easy") }
 }
 
@@ -54,40 +61,42 @@ struct Ring: View {
     var size: CGFloat = 96
     var lineWidth: CGFloat? = nil
     var onDark = false
+    var textColor: Color? = nil
     @State private var shown = 0.0
 
     init(value: Double?, color: Color, label: String, unit: String = "", size: CGFloat = 96) {
         self.value = value; self.colors = [color.opacity(0.7), color]; self.label = label; self.unit = unit; self.size = size
     }
-    init(value: Double?, colors: [Color], label: String, unit: String = "", size: CGFloat = 96, onDark: Bool = false) {
-        self.value = value; self.colors = colors; self.label = label; self.unit = unit; self.size = size; self.onDark = onDark
+    init(value: Double?, colors: [Color], label: String, unit: String = "", size: CGFloat = 96, onDark: Bool = false, textColor: Color? = nil) {
+        self.value = value; self.colors = colors; self.label = label; self.unit = unit; self.size = size; self.onDark = onDark; self.textColor = textColor
     }
 
     var body: some View {
         let lw = lineWidth ?? size * 0.11
         let sweep = 0.75   // 270° gauge, opening at the bottom
+        let fg = textColor ?? (onDark ? Color.white : Color.primary)
         ZStack {
             Circle().trim(from: 0, to: sweep)
-                .stroke(onDark ? Color.white.opacity(0.22) : (colors.last ?? .gray).opacity(0.15), style: StrokeStyle(lineWidth: lw, lineCap: .round))
+                .stroke(onDark ? Color.white.opacity(0.35) : (colors.last ?? .gray).opacity(0.22), style: StrokeStyle(lineWidth: lw, lineCap: .round))
                 .rotationEffect(.degrees(135))
             Circle().trim(from: 0, to: sweep * shown / 100)
                 .stroke(AngularGradient(colors: colors, center: .center, startAngle: .degrees(0), endAngle: .degrees(270)),
                         style: StrokeStyle(lineWidth: lw, lineCap: .round))
                 .rotationEffect(.degrees(135))
-                .shadow(color: (colors.last ?? .gray).opacity(onDark ? 0.0 : 0.45), radius: size * 0.07)
-            if !label.isEmpty {
-                Text(label.uppercased()).font(.system(size: max(9, size * 0.095), weight: .semibold)).tracking(1)
-                    .foregroundStyle(onDark ? Color.white.opacity(0.8) : .secondary)
-                    .offset(y: -size * 0.04)
-            }
+                .shadow(color: (colors.last ?? .gray).opacity(onDark ? 0.0 : 0.30), radius: size * 0.06)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(value.map { String(format: "%.0f", $0) } ?? "—")
-                    .font(.system(size: size * 0.30, weight: .bold, design: .rounded)).monospacedDigit()
+                    .font(.system(size: size * 0.34, weight: .bold, design: .rounded)).monospacedDigit()
                     .contentTransition(.numericText())
-                if !unit.isEmpty { Text(unit).font(.system(size: size * 0.11, weight: .semibold)).opacity(0.7) }
+                if !unit.isEmpty { Text(unit).font(.system(size: size * 0.12, weight: .semibold)).opacity(0.7) }
             }
-            .foregroundStyle(onDark ? .white : .primary)
-            .offset(y: size * 0.34)
+            .foregroundStyle(fg)
+            .offset(y: -size * 0.02)
+            if !label.isEmpty {
+                Text(label.uppercased()).font(.system(size: max(9, size * 0.10), weight: .semibold)).tracking(1.2)
+                    .foregroundStyle(fg.opacity(0.7))
+                    .offset(y: size * 0.40)
+            }
         }
         .frame(width: size, height: size)
         .padding(.bottom, size * 0.04)
@@ -150,7 +159,7 @@ struct DriverBar: View {
             let w = min(half, half * abs(points) / max(maxMagnitude, 1))
             ZStack(alignment: .center) {
                 Capsule().fill(Color.gray.opacity(0.12))
-                Capsule().fill(points >= 0 ? Color.green : Color.orange)
+                Capsule().fill(points >= 0 ? Palette.sage : Palette.clay)
                     .frame(width: max(4, w))
                     .offset(x: points >= 0 ? max(4, w) / 2 : -max(4, w) / 2)
                 Rectangle().fill(Color.gray.opacity(0.4)).frame(width: 1)
@@ -203,7 +212,7 @@ struct AmbientBackground: View {
             Color.screenBG
             GeometryReader { g in
                 Circle().fill(tint.opacity(0.28)).frame(width: g.size.width * 0.95).blur(radius: 70).offset(x: g.size.width * 0.35, y: -g.size.width * 0.35)
-                Circle().fill(Color.purple.opacity(0.12)).frame(width: g.size.width * 0.8).blur(radius: 80).offset(x: -g.size.width * 0.45, y: g.size.height * 0.30)
+                Circle().fill(Palette.lavender[0].opacity(0.25)).frame(width: g.size.width * 0.8).blur(radius: 80).offset(x: -g.size.width * 0.45, y: g.size.height * 0.30)
             }
         }
         .ignoresSafeArea()

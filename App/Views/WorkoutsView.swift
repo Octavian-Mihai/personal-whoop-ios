@@ -24,7 +24,7 @@ struct WorkoutsView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
-            .background { AmbientBackground(tint: .orange) }
+            .background { AmbientBackground(tint: Palette.peach[0]) }
             .navigationTitle("Workouts")
             .toolbar { Button { showAdd = true } label: { Image(systemName: "plus.circle.fill") } }
             .sheet(isPresented: $showAdd) { ManualWorkoutSheet() }
@@ -33,11 +33,11 @@ struct WorkoutsView: View {
     }
 
     private var startHero: some View {
-        HeroCard(colors: [Color(red: 1, green: 0.55, blue: 0.25), Color(red: 0.9, green: 0.2, blue: 0.4), Color(red: 0.5, green: 0.15, blue: 0.7)]) {
+        HeroCard(colors: [Palette.peach[0], Palette.rose[0], Palette.lavender[1]]) {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Ready to move?").font(.title2.bold()).foregroundStyle(.white)
-                    Text("Live heart rate, zones and coaching tuned to the activity.").font(.footnote).foregroundStyle(.white.opacity(0.85))
+                    Text("Ready to move?").font(.title2.bold()).foregroundStyle(Palette.ink)
+                    Text("Live heart rate, zones and coaching tuned to the activity.").font(.footnote).foregroundStyle(Palette.ink.opacity(0.7))
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
@@ -47,16 +47,16 @@ struct WorkoutsView: View {
                                     Image(systemName: k.icon).font(.title3)
                                     Text(k.rawValue).font(.caption2.weight(.medium))
                                 }
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Palette.ink)
                                 .frame(width: 66, height: 66)
-                                .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                             }
                         }
                     }
                 }
                 Button { showStart = true } label: {
                     Label("More options", systemImage: "slider.horizontal.3").font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 14).padding(.vertical, 8).background(.white, in: Capsule()).foregroundStyle(Color(red: 0.8, green: 0.2, blue: 0.35))
+                        .padding(.horizontal, 14).padding(.vertical, 8).background(.white, in: Capsule()).foregroundStyle(Palette.ink)
                 }
             }
         }
@@ -68,15 +68,15 @@ struct WorkoutsView: View {
         let mins = w.reduce(0) { $0 + ($1.end - $1.start) / 60 }
         let kcal = w.reduce(0) { $0 + ($1.kcal ?? 0) }
         return HStack(spacing: 12) {
-            summaryTile("figure.run", "Workouts", "\(w.count)", [.orange, .pink])
-            summaryTile("clock.fill", "Minutes", String(format: "%.0f", mins), [.blue, .cyan])
-            summaryTile("flame.fill", "Calories", String(format: "%.0f", kcal), [.red, .orange])
+            summaryTile("figure.run", "Workouts", "\(w.count)", Palette.peach)
+            summaryTile("clock.fill", "Minutes", String(format: "%.0f", mins), Palette.sky)
+            summaryTile("flame.fill", "Calories", String(format: "%.0f", kcal), Palette.rose)
         }
     }
 
     private func summaryTile(_ icon: String, _ label: String, _ value: String, _ colors: [Color]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon).font(.subheadline.bold()).foregroundStyle(.white)
+            Image(systemName: icon).font(.subheadline.bold()).foregroundStyle(Palette.ink)
                 .frame(width: 32, height: 32)
                 .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
             Text(value).font(.title2.bold().monospacedDigit())
@@ -95,14 +95,14 @@ struct WorkoutsView: View {
         Card(title: "Detected today", subtitle: "From heart rate and motion", icon: "waveform.path.ecg") {
             ForEach(model.detected) { w in
                 HStack(spacing: 12) {
-                    Image(systemName: "bolt.heart.fill").foregroundStyle(.white).frame(width: 38, height: 38)
-                        .background(LinearGradient(colors: [.pink, .orange], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Image(systemName: "bolt.heart.fill").foregroundStyle(Palette.ink).frame(width: 38, height: 38)
+                        .background(LinearGradient(colors: Palette.rose, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(fmtClock(w.start)) · \(fmtDuration(w.durationMin))").font(.subheadline.weight(.semibold))
                         Text(String(format: "avg %.0f · peak %.0f bpm · %.0f kcal", w.avgHR, w.peakHR, w.kcal)).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if let e = w.effort { Text(String(format: "%.0f", e)).font(.headline.monospacedDigit()).padding(8).background(Color.blue.opacity(0.12), in: Circle()) }
+                    if let e = w.effort { Text(String(format: "%.0f", e)).font(.headline.monospacedDigit()).padding(8).background(Palette.sky[0].opacity(0.6), in: Circle()) }
                 }
             }
         }
@@ -120,7 +120,7 @@ struct WorkoutsView: View {
                 let k = kind(w.sport)
                 NavigationLink { WorkoutDetailView(workout: w) } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: k.icon).foregroundStyle(.white).frame(width: 42, height: 42)
+                        Image(systemName: k.icon).foregroundStyle(Palette.ink).frame(width: 42, height: 42)
                             .background(LinearGradient(colors: k.colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(w.sport).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
@@ -141,16 +141,16 @@ struct WorkoutsView: View {
 
     private var toolsGrid: some View {
         let tools: [(String, String, [Color], AnyView)] = [
-            ("Interval timer", "timer", [.pink, .red], AnyView(IntervalTimerView())),
-            ("Lift Log", "dumbbell.fill", [.purple, .indigo], AnyView(LiftLogView())),
-            ("Live coach", "headphones", [.teal, .blue], AnyView(LiveCoachView())),
+            ("Interval timer", "timer", Palette.rose, AnyView(IntervalTimerView())),
+            ("Lift Log", "dumbbell.fill", Palette.lavender, AnyView(LiftLogView())),
+            ("Live coach", "headphones", Palette.aqua, AnyView(LiveCoachView())),
         ]
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
             ForEach(tools, id: \.0) { t in
                 NavigationLink { t.3 } label: {
                     VStack(spacing: 10) {
-                        Image(systemName: t.1).font(.title3).foregroundStyle(.white)
-                        Text(t.0).font(.caption.weight(.semibold)).foregroundStyle(.white).multilineTextAlignment(.center)
+                        Image(systemName: t.1).font(.title3).foregroundStyle(Palette.ink)
+                        Text(t.0).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink).multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity, minHeight: 92)
                     .background(LinearGradient(colors: t.2, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -173,7 +173,7 @@ struct WorkoutsView: View {
                             let date = cal.date(byAdding: .day, value: (w - 12) * 7 + d, to: weekStart)!
                             let v = date > Date() ? nil : kcal[DayFormat.string(date)]
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(LinearGradient(colors: [.orange, .pink], startPoint: .top, endPoint: .bottom))
+                                .fill(LinearGradient(colors: Palette.peach, startPoint: .top, endPoint: .bottom))
                                 .opacity(v == nil ? 0 : [0.08, 0.3, 0.5, 0.75, 1][ActivityHeatmap.level(value: v ?? 0, daily: daily)])
                                 .frame(height: 18)
                         }
@@ -182,7 +182,7 @@ struct WorkoutsView: View {
             }
             HStack(spacing: 4) {
                 Text("Less").font(.caption2).foregroundStyle(.secondary)
-                ForEach(0..<5, id: \.self) { i in RoundedRectangle(cornerRadius: 3).fill(Color.orange.opacity([0.08, 0.3, 0.5, 0.75, 1][i])).frame(width: 12, height: 12) }
+                ForEach(0..<5, id: \.self) { i in RoundedRectangle(cornerRadius: 3).fill(Palette.peach[1].opacity([0.15, 0.35, 0.55, 0.75, 1][i])).frame(width: 12, height: 12) }
                 Text("More").font(.caption2).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .trailing)
         }

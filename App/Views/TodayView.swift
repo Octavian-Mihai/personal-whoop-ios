@@ -4,6 +4,7 @@ import StrandAnalytics
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
+    @State private var detail: MetricKind?
 
     var body: some View {
         NavigationStack {
@@ -20,6 +21,7 @@ struct TodayView: View {
             .background { AmbientBackground(tint: (model.today?.charge.map(ChargeBand.of) ?? .yellow).gradient[0]) }
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $detail) { MetricDetailView(kind: $0).environment(model) }
         }
     }
 
@@ -35,7 +37,7 @@ struct TodayView: View {
             if model.streak.current > 0 {
                 Label("\(model.streak.current)", systemImage: "flame.fill").font(.subheadline.bold())
                     .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(Color.orange.opacity(0.15), in: Capsule()).foregroundStyle(.orange)
+                    .background(Palette.peach[0].opacity(0.5), in: Capsule()).foregroundStyle(Palette.clay)
             }
         }
         .padding(.top, 4)
@@ -57,7 +59,7 @@ struct TodayView: View {
 
     private func illnessBanner(_ r: IllnessResult) -> some View {
         Card {
-            Label("A heads-up to rest", systemImage: "thermometer.medium").font(.headline).foregroundStyle(.orange)
+            Label("A heads-up to rest", systemImage: "thermometer.medium").font(.headline).foregroundStyle(Palette.clay)
             Text("\(r.firing.sorted().joined(separator: ", ")) are off your normal. On-device estimate (approximate), not a diagnosis.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
@@ -87,39 +89,45 @@ struct TodayView: View {
         let effort = t?.effort
         let b = model.baselines
         return VStack(spacing: 14) {
-            HeroCard(colors: (band ?? .yellow).gradient.reversed().map { $0 }) {
+            HeroCard(colors: (band ?? .yellow).gradient) {
                 HStack(spacing: 18) {
-                    Ring(value: t?.charge, colors: [.white.opacity(0.6), .white], label: "Charge", unit: "%", size: 160, onDark: true)
+                    Ring(value: t?.charge, colors: [.white.opacity(0.75), .white], label: "Charge", unit: "%", size: 160, onDark: true, textColor: Palette.ink)
+                        .onTapGesture { detail = .charge }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(band?.word ?? "Calibrating").font(.title2.bold()).foregroundStyle(.white)
+                        Text(band?.word ?? "Calibrating").font(.title2.bold()).foregroundStyle(Palette.ink)
                         Text(t?.charge == nil ? "Need a few more nights to learn your baseline." : "HRV, resting HR, sleep and recent strain, versus your own normal.")
-                            .font(.footnote).foregroundStyle(.white.opacity(0.85))
+                            .font(.footnote).foregroundStyle(Palette.ink.opacity(0.75))
                         HStack(spacing: 6) {
                             Text(ConfidenceTier.forNights(b?.hrv.count ?? 0).rawValue).font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 8).padding(.vertical, 3).background(.white.opacity(0.22), in: Capsule()).foregroundStyle(.white)
-                            Text("\(b?.hrv.count ?? 0) nights").font(.caption2).foregroundStyle(.white.opacity(0.8))
+                                .padding(.horizontal, 8).padding(.vertical, 3).background(.white.opacity(0.45), in: Capsule()).foregroundStyle(Palette.ink)
+                            Text("\(b?.hrv.count ?? 0) nights").font(.caption2).foregroundStyle(Palette.ink.opacity(0.7))
                         }
+                        Label("Tap for details", systemImage: "chevron.right.circle").font(.caption2).foregroundStyle(Palette.ink.opacity(0.55))
                     }
                 }
             }
+            .contentShape(Rectangle()).onTapGesture { detail = .charge }
             HStack(spacing: 12) {
                 Card {
                     Ring(value: model.settings.effortOn21Scale ? effort.map { StrainScorer.to21($0) / 21 * 100 } : effort,
-                         colors: [Color(red: 0.35, green: 0.65, blue: 1), Color(red: 0.15, green: 0.35, blue: 0.95)],
-                         label: "Effort", unit: model.settings.effortOn21Scale ? "/21" : "", size: 110).frame(maxWidth: .infinity)
+                         colors: Palette.sky, label: "Effort", unit: model.settings.effortOn21Scale ? "/21" : "", size: 110).frame(maxWidth: .infinity)
                 }
+                .contentShape(Rectangle()).onTapGesture { detail = .effort }
                 Card {
-                    Ring(value: t?.rest, colors: [Color(red: 0.75, green: 0.5, blue: 1), Color(red: 0.55, green: 0.25, blue: 0.9)],
-                         label: "Rest", unit: "%", size: 110).frame(maxWidth: .infinity)
+                    Ring(value: t?.rest, colors: Palette.lavender, label: "Rest", unit: "%", size: 110).frame(maxWidth: .infinity)
                 }
+                .contentShape(Rectangle()).onTapGesture { detail = .rest }
             }
             HStack(spacing: 10) {
                 MetricChip(icon: "waveform.path.ecg", label: "HRV", value: t?.hrv.map { String(format: "%.0f ms", $0) } ?? "—",
-                           delta: t?.hrv.flatMap { v in b.map { v - $0.hrv.center } }, series: series(\.hrv), tint: .teal)
+                           delta: t?.hrv.flatMap { v in b.map { v - $0.hrv.center } }, series: series(\.hrv), tint: Palette.aqua[1])
+                    .onTapGesture { detail = .hrv }
                 MetricChip(icon: "heart.fill", label: "Resting HR", value: t?.restingHR.map { String(format: "%.0f bpm", $0) } ?? "—",
-                           delta: t?.restingHR.flatMap { v in b.map { v - $0.restingHR.center } }, higherIsBetter: false, series: series(\.restingHR), tint: .red)
+                           delta: t?.restingHR.flatMap { v in b.map { v - $0.restingHR.center } }, higherIsBetter: false, series: series(\.restingHR), tint: Palette.rose[1])
+                    .onTapGesture { detail = .restingHR }
                 MetricChip(icon: "lungs.fill", label: "Resp.", value: t?.respiration.map { String(format: "%.1f", $0) } ?? "—",
-                           delta: t?.respiration.flatMap { v in b.map { v - $0.respiration.center } }, deltaFormat: "%+.1f", higherIsBetter: false, series: series(\.respiration), tint: .cyan)
+                           delta: t?.respiration.flatMap { v in b.map { v - $0.respiration.center } }, deltaFormat: "%+.1f", higherIsBetter: false, series: series(\.respiration), tint: Palette.sky[1])
+                    .onTapGesture { detail = .respiration }
             }
         }
     }
@@ -157,12 +165,14 @@ struct TodayView: View {
                         if mode != .value {
                             Text(String(format: "%+.1f", d.points)).font(.caption.weight(.bold).monospacedDigit())
                                 .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background((d.points >= 0 ? Color.green : Color.orange).opacity(0.15), in: Capsule())
-                                .foregroundStyle(d.points >= 0 ? .green : .orange)
+                                .background((d.points >= 0 ? Palette.sage : Palette.clay).opacity(0.18), in: Capsule())
+                                .foregroundStyle(d.points >= 0 ? Palette.sage : Palette.clay)
                         }
                     }
                     if mode != .value { DriverBar(points: d.points, maxMagnitude: mx) }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { detail = MetricKind(driverName: d.name) }
             }
         }
     }
@@ -194,7 +204,7 @@ struct TodayView: View {
                 Chart(model.stressHours) { h in
                     if let s = h.score {
                         BarMark(x: .value("Hour", Date(timeIntervalSince1970: h.start), unit: .hour), y: .value("Stress", s))
-                            .foregroundStyle(s >= 2 ? Color.orange : Color.teal)
+                            .foregroundStyle(s >= 2 ? Palette.clay : Palette.aqua[1])
                     }
                 }
                 .chartYScale(domain: 0...3).frame(height: 120)

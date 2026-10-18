@@ -27,7 +27,7 @@ struct TrendsView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
-            .background { AmbientBackground(tint: .green) }
+            .background { AmbientBackground(tint: Palette.mint[0]) }
             .navigationTitle("Trends")
         }
     }

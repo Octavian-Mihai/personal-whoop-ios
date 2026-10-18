@@ -17,17 +17,17 @@ struct SleepView: View {
                 }
                 .padding(.horizontal, 16).padding(.bottom, 24)
             }
-            .background { AmbientBackground(tint: .indigo) }
+            .background { AmbientBackground(tint: Palette.lavender[0]) }
             .navigationTitle("Sleep")
         }
     }
 
     private func level(_ s: SleepStage) -> Double { [SleepStage.awake: 3, .rem: 2, .light: 1, .deep: 0][s] ?? 1 }
-    private func color(_ s: SleepStage) -> Color { [SleepStage.awake: Color(red: 1, green: 0.62, blue: 0.3), .rem: Color(red: 0.85, green: 0.5, blue: 1), .light: Color(red: 0.4, green: 0.7, blue: 1), .deep: Color(red: 0.45, green: 0.45, blue: 1)][s] ?? .gray }
+    private func color(_ s: SleepStage) -> Color { [SleepStage.awake: Color(red: 0.98, green: 0.78, blue: 0.66), .rem: Color(red: 0.86, green: 0.76, blue: 0.97), .light: Color(red: 0.70, green: 0.83, blue: 0.98), .deep: Color(red: 0.62, green: 0.66, blue: 0.95)][s] ?? .gray }
 
     private func hypnogram(_ n: SleepSession) -> some View {
         let m = HypnogramMetrics(session: n)
-        return HeroCard(colors: [Color(red: 0.07, green: 0.09, blue: 0.28), Color(red: 0.30, green: 0.15, blue: 0.55)], stars: true) {
+        return HeroCard(colors: [Color(red: 0.23, green: 0.26, blue: 0.47), Color(red: 0.50, green: 0.43, blue: 0.72)], stars: true) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {

@@ -17,14 +17,14 @@ enum WorkoutKind: String, CaseIterable, Identifiable {
     }
     var colors: [Color] {
         switch self {
-        case .run: return [Color(red: 1, green: 0.55, blue: 0.25), Color(red: 0.95, green: 0.25, blue: 0.3)]
-        case .walk: return [Color(red: 0.3, green: 0.85, blue: 0.6), Color(red: 0.1, green: 0.6, blue: 0.5)]
-        case .cycle: return [Color(red: 0.35, green: 0.75, blue: 1), Color(red: 0.15, green: 0.4, blue: 0.95)]
-        case .strength: return [Color(red: 0.7, green: 0.45, blue: 1), Color(red: 0.45, green: 0.2, blue: 0.85)]
-        case .hiit: return [Color(red: 1, green: 0.4, blue: 0.6), Color(red: 0.8, green: 0.1, blue: 0.4)]
-        case .swim: return [Color(red: 0.3, green: 0.9, blue: 0.95), Color(red: 0.1, green: 0.55, blue: 0.85)]
-        case .yoga: return [Color(red: 1, green: 0.8, blue: 0.4), Color(red: 0.95, green: 0.55, blue: 0.3)]
-        case .other: return [Color(red: 0.6, green: 0.65, blue: 0.75), Color(red: 0.35, green: 0.4, blue: 0.55)]
+        case .run: return Palette.peach
+        case .walk: return Palette.mint
+        case .cycle: return Palette.sky
+        case .strength: return Palette.lavender
+        case .hiit: return Palette.rose
+        case .swim: return Palette.aqua
+        case .yoga: return Palette.butter
+        case .other: return [Color(red: 0.82, green: 0.85, blue: 0.90), Color(red: 0.68, green: 0.72, blue: 0.80)]
         }
     }
     /// Target HR zone band (1…5) the coach holds you to.

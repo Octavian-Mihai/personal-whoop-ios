@@ -41,7 +41,14 @@ struct WorkoutStartSheet: View {
 }
 
 func zoneColor(_ z: Int?) -> Color {
-    switch z ?? 0 { case 0: return .gray; case 1: return .blue; case 2: return .green; case 3: return .yellow; case 4: return .orange; default: return .red }
+    switch z ?? 0 {
+    case 0: return Color(red: 0.74, green: 0.76, blue: 0.82)
+    case 1: return Palette.sky[1]
+    case 2: return Palette.mint[1]
+    case 3: return Palette.butter[1]
+    case 4: return Palette.peach[1]
+    default: return Palette.rose[1]
+    }
 }
 
 struct LiveWorkoutView: View {
