@@ -296,33 +296,3 @@ struct IntervalTimerView: View {
         }
     }
 }
-
-struct LiveCoachView: View {
-    @Environment(AppModel.self) private var model
-    @State private var coach: LiveSessionCoach?
-    @State private var cue: String = "Warming up"
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text(model.ble.heartRate.map(String.init) ?? "—").font(.system(size: 90, weight: .bold, design: .rounded))
-            Text(cue).font(.title2.bold())
-            if let c = coach {
-                Text(String(format: "Target %.0f–%.0f%% of HRR", c.band.lowerBound * 100, c.band.upperBound * 100)).foregroundStyle(.secondary)
-            }
-            Text("Needs a connected strap. Coaching starts after a 60 s warm-up and stays silent unless you're out of band for 25 s.")
-                .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).padding()
-        }
-        .navigationTitle("Live coach")
-        .onAppear {
-            coach = LiveSessionCoach(restingHR: model.today?.restingHR ?? 58, hrMax: 208 - 0.7 * model.settings.profile.age, charge: model.today?.charge)
-        }
-        .onChange(of: model.ble.heartRate) { _, bpm in
-            guard let bpm, var c = coach else { return }
-            if let q = c.ingest(t: Date().timeIntervalSince1970, bpm: Double(bpm)) {
-                cue = q.rawValue
-                model.ble.buzz(loops: q == .push ? 2 : 1)
-            }
-            coach = c
-        }
-    }
-}

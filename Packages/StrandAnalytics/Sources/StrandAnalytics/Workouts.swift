@@ -130,43 +130,6 @@ public enum WorkoutTypeClassifier {
     }
 }
 
-/// §8.4 Live session coach.
-public struct LiveSessionCoach: Sendable {
-    public enum Cue: String, Sendable { case push = "PUSH", easeOff = "EASE OFF" }
-    public var restingHR: Double, hrMax: Double, charge: Double?
-    var window: [(t: Double, bpm: Double)] = []
-    var startedAt: Double?
-    var belowSince: Double?, aboveSince: Double?
-    var lastCue: Double = -.infinity
-    var lastData: Double = 0
-
-    public init(restingHR: Double, hrMax: Double, charge: Double?) { self.restingHR = restingHR; self.hrMax = hrMax; self.charge = charge }
-
-    public var band: ClosedRange<Double> {
-        let ceiling = 0.60 + 0.22 * clamp01((charge ?? 50) / 100)
-        let floor = max(0.40, ceiling - 0.15)
-        return floor...ceiling
-    }
-
-    public mutating func ingest(t: Double, bpm: Double) -> Cue? {
-        guard (30...220).contains(bpm) else { return nil }
-        if startedAt == nil { startedAt = t }
-        if t - lastData > 8, lastData > 0 { belowSince = nil; aboveSince = nil }
-        lastData = t
-        window.append((t, bpm)); window.removeAll { t - $0.t > 12 }
-        let med = median(window.map(\.bpm))
-        let frac = (med - restingHR) / max(1, hrMax - restingHR)
-        guard t - startedAt! >= 60 else { return nil }
-        let b = band
-        if frac < b.lowerBound - 0.02 { belowSince = belowSince ?? t } else { belowSince = nil }
-        if frac > b.upperBound + 0.02 { aboveSince = aboveSince ?? t } else { aboveSince = nil }
-        guard t - lastCue >= 50 else { return nil }
-        if let s = belowSince, t - s >= 25 { lastCue = t; belowSince = nil; return .push }
-        if let s = aboveSince, t - s >= 25 { lastCue = t; aboveSince = nil; return .easeOff }
-        return nil
-    }
-}
-
 /// §8.5 Heart-rate recovery.
 public struct HRRecovery: Sendable {
     public var cessation: Double

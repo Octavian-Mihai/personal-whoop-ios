@@ -96,15 +96,6 @@ struct SavedWorkout: Codable, Identifiable, Equatable {
     var typeGuess: String?
 }
 
-struct LiftWorkoutLog: Codable, Identifiable, Equatable {
-    var id = UUID()
-    var date: Double
-    var title: String
-    var rpe: Double?
-    var minutes: Double
-    var exercises: [LiftExercise]
-}
-
 struct Snapshot: Codable {
     var settings = AppSettings()
     var days: [DailyMetric] = []
@@ -112,7 +103,6 @@ struct Snapshot: Codable {
     var dismissedSuggestions: [Double]?
     var hydration: [HydrationLog] = []
     var workouts: [SavedWorkout] = []
-    var lifts: [LiftWorkoutLog] = []
     var liveHR: [HRSample] = []
     var periodStarts: [String] = []
 }

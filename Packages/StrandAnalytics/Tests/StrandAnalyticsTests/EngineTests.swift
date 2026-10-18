@@ -93,12 +93,6 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(s.current, 3); XCTAssertEqual(s.longest, 3)
     }
 
-    func testLiftMetrics() {
-        let sets = [LiftSet(weightKg: 100, reps: 5), LiftSet(weightKg: 90, reps: 10), LiftSet(weightKg: 40, reps: 10, isWarmup: true)]
-        XCTAssertEqual(LiftMetrics.volumeLoad(sets), 1400)
-        XCTAssertEqual(LiftMetrics.bestSet(sets)?.weightKg, 90)
-    }
-
     func testCosinor() {
         var bins: [(hour: Double, value: Double)] = []
         for h in 0..<24 {

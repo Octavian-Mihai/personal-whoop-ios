@@ -249,7 +249,6 @@ final class AppModel {
     }
 
     func addWorkout(_ w: SavedWorkout) { snapshot.workouts.append(w); snapshot.workouts.sort { $0.start > $1.start }; recompute() }
-    func addLift(_ l: LiftWorkoutLog) { snapshot.lifts.insert(l, at: 0); save() }
 
     func exportBackup() -> URL? {
         guard let d = try? JSONEncoder().encode(snapshot) else { return nil }
