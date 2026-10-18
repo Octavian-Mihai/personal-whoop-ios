@@ -20,3 +20,9 @@ App Groups capability for both the app and widget targets under your own signing
 
 ## First run
 A fresh install asks whether to use demo data or connect a real strap (Settings → Profile & units → Data source switches later).
+
+## Apple Health and Live Activities
+- Settings → Apple Health reads steps, resting HR, respiratory rate, sleep, workouts and active energy (fills gaps; steps replace the strap's estimate)
+  and can write workouts (with HR samples), sleep stages and water back. HRV is intentionally not imported (SDNN vs RMSSD).
+- A tracked workout shows on the lock screen and in the Dynamic Island (Live Activity: heart rate, zone, timer, kcal, effort).
+- Both need the HealthKit and App Groups capabilities enabled under your own signing team when running on a device.

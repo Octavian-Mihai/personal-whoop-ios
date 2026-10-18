@@ -28,6 +28,7 @@ struct MoreView: View {
                     if on("illness") { NavigationLink { IllnessView() } label: { Label("Illness watch", systemImage: "thermometer.medium") } }
                 }
                 Section("Data & about") {
+                    NavigationLink { HealthView() } label: { Label("Apple Health", systemImage: "heart.text.square") }
                     NavigationLink { BackupView() } label: { Label("Backup & restore", systemImage: "externaldrive") }
                     if on("fusion") { NavigationLink { FusionView() } label: { Label("Combining sources", systemImage: "square.stack.3d.up") } }
                     if on("testcentre") { NavigationLink { TestCentreView() } label: { Label("Test Centre", systemImage: "stethoscope") } }
@@ -238,6 +239,15 @@ struct FusionView: View {
         List {
             Section("How it works") {
                 Text("When several sources report the same metric, one is picked verbatim and the disagreement is shown. Numbers are never averaged across devices.").font(.footnote)
+            }
+            if let h = model.snapshot.healthDays?[DayFormat.string(Date())] {
+                Section("Apple Health today") {
+                    if let s = h.steps { LabeledContent("Steps", value: s.formatted()) }
+                    if let r = h.restingHR { LabeledContent("Resting HR", value: String(format: "%.0f bpm", r)) }
+                    if let a = h.asleepMin { LabeledContent("Asleep", value: fmtDuration(a)) }
+                    if let k = h.activeKcal { LabeledContent("Active energy", value: String(format: "%.0f kcal", k)) }
+                    Text("Steps from Health replace the strap estimate. Resting HR and sleep only fill days the strap didn't cover.").font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("Example · today's resting HR") {
                 let rhr = model.today?.restingHR ?? 56

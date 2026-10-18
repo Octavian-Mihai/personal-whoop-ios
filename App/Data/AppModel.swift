@@ -44,6 +44,7 @@ final class AppModel {
     var snoozeUntil: Date?
 
     let ble = BLEManager()
+    let health = HealthBridge()
     private let url: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -205,6 +206,7 @@ final class AppModel {
         streak = StreakCalculator.streaks(days: qualifying, today: DayFormat.string(Date()))
         save()
         syncWidgets()
+        writeNightToHealth()
     }
 
     /// Today's live heart-rate readings as a raw day (no gravity or beat intervals over the standard HR profile).
@@ -334,6 +336,61 @@ final class AppModel {
     func explainBuzz(_ cause: String, _ text: String) {
         guard settings.notifications.buzzExplain else { return }
         Notifier.post(id: "buzz-cause-\(cause)", title: "Strap buzzed", body: text, silent: true)
+    }
+
+    // MARK: Apple Health
+    var healthPrefs: HealthPrefs { get { snapshot.healthPrefs ?? HealthPrefs() } set { snapshot.healthPrefs = newValue; save() } }
+    /// True once the user has gone through the Health permission sheet.
+    var healthConnected: Bool { healthPrefs.readEnabled }
+
+    func connectHealth() async {
+        guard await health.requestAuthorization() else { return }
+        var p = healthPrefs; p.readEnabled = true; healthPrefs = p
+        await importHealth()
+    }
+
+    func disconnectHealth() { var p = healthPrefs; p.readEnabled = false; healthPrefs = p }
+
+    /// Pulls the last 30 days from Apple Health. It fills gaps and feeds the comparison screen; it never replaces strap-derived numbers,
+    /// except steps, which Health *counts* while the strap only estimates.
+    func importHealth() async {
+        guard healthConnected else { return }
+        let r = await health.importDays(30)
+        applyHealth(r.days, workouts: r.workouts)
+        var p = healthPrefs; p.lastImport = Date(); healthPrefs = p
+    }
+
+    private func applyHealth(_ days: [HealthDay], workouts: [SavedWorkout]) {
+        var map = Dictionary(snapshot.days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
+        var hd = snapshot.healthDays ?? [:]
+        let need = sleepNeedMin
+        for h in days {
+            hd[h.day] = h
+            var m = map[h.day] ?? DailyMetric(day: h.day)
+            if let s = h.steps { m.steps = s }
+            if m.restingHR == nil { m.restingHR = h.restingHR }
+            if m.respiration == nil { m.respiration = h.respiration }
+            if m.asleepMin == nil, let a = h.asleepMin, a > 0 {
+                m.asleepMin = a; m.deepMin = h.deepMin; m.remMin = h.remMin; m.lightMin = h.coreMin; m.awakeMin = h.awakeMin
+                m.inBedMin = a + (h.awakeMin ?? 0)
+                m.rest = RestScorer.score(asleepMin: a, inBedMin: m.inBedMin ?? a, deepMin: h.deepMin ?? 0, remMin: h.remMin ?? 0, needMin: need)
+            }
+            map[h.day] = m
+        }
+        snapshot.days = map.values.sorted { $0.day < $1.day }
+        snapshot.healthDays = hd
+        let known = Set(snapshot.workouts.map(\.id))
+        snapshot.workouts.append(contentsOf: workouts.filter { !known.contains($0.id) })
+        snapshot.workouts.sort { $0.start > $1.start }
+        recompute()
+    }
+
+    private func writeNightToHealth() {
+        guard healthConnected, healthPrefs.writeSleep, let n = lastNight else { return }
+        let key = "healthSleepWritten"
+        guard UserDefaults.standard.double(forKey: key) != n.start else { return }
+        UserDefaults.standard.set(n.start, forKey: key)
+        Task { await health.save(night: n) }
     }
 
     // MARK: widgets
@@ -498,7 +555,9 @@ final class AppModel {
 
     // MARK: actions
     func logHydration(_ ml: Int) {
-        snapshot.hydration.append(HydrationLog(time: Date().timeIntervalSince1970, ml: ml)); save()
+        let log = HydrationLog(time: Date().timeIntervalSince1970, ml: ml)
+        snapshot.hydration.append(log); save()
+        if healthConnected, healthPrefs.writeWater { Task { await health.save(water: ml, at: Date(), id: log.id) } }
     }
     var hydrationToday: Int {
         let start = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
@@ -514,7 +573,10 @@ final class AppModel {
         save()
     }
 
-    func addWorkout(_ w: SavedWorkout) { snapshot.workouts.append(w); snapshot.workouts.sort { $0.start > $1.start }; recompute() }
+    func addWorkout(_ w: SavedWorkout) {
+        snapshot.workouts.append(w); snapshot.workouts.sort { $0.start > $1.start }; recompute()
+        if healthConnected, healthPrefs.writeWorkouts { Task { await health.save(workout: w) } }
+    }
 
     func exportBackup() -> URL? {
         guard let d = try? JSONEncoder().encode(snapshot) else { return nil }

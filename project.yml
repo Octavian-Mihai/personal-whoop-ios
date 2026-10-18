@@ -15,6 +15,8 @@ targets:
       path: App/PersonalWhoop.entitlements
       properties:
         com.apple.security.application-groups: [group.com.octa.personalwhoop]
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
     dependencies:
       - package: StrandAnalytics
         product: StrandAnalytics
@@ -28,6 +30,9 @@ targets:
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        NSHealthShareUsageDescription: Reads steps, resting heart rate, sleep and workouts so your scores can use what your phone or watch already measured.
+        NSHealthUpdateUsageDescription: Saves your workouts, sleep and water from this app to Apple Health.
+        NSSupportsLiveActivities: true
         NSBluetoothAlwaysUsageDescription: Connects to your heart-rate strap or WHOOP to read live data.
         UIBackgroundModes: [bluetooth-central]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]

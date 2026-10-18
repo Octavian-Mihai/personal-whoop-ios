@@ -80,6 +80,11 @@ final class LiveWorkout {
     private var timer: Timer?
     private weak var ble: BLEManager?
     private var simPhase = 0.0
+    private let activityController = LiveActivityController()
+
+    private var activityState: WorkoutAttributes.ContentState {
+        .init(bpm: smoothedBPM ?? 0, zone: zone ?? 0, kcal: kcal, avgHR: avgHR, effort: effort, inTarget: inTarget, cue: cue, simulated: simulated)
+    }
 
     init(kind: WorkoutKind, profile: Profile, restingHR: Double, ble: BLEManager) {
         self.kind = kind; self.profile = profile; self.rhr = restingHR; self.ble = ble
@@ -88,6 +93,7 @@ final class LiveWorkout {
         lapStart = startedAt
         // Ask the strap for its realtime HR stream (~1 Hz) while we are tracking.
         if ble.state == .connected { ble.send(.toggleRealtimeHR, payload: [0x01]) }
+        activityController.start(kind: kind.rawValue, icon: kind.icon, startedAt: Date(timeIntervalSince1970: startedAt), zones: kind.targetZones, state: activityState)
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -137,6 +143,7 @@ final class LiveWorkout {
         if samples.count % 5 == 0 { effort = StrainScorer.score(hr: samples, restingHR: rhr, hrMax: hrMax, requireGates: false) }
         resolveRest(now: now)
         coach(now: now)
+        if Int(elapsed) % 5 == 0 { activityController.update(activityState) }
     }
 
     private func coach(now: Double) {
@@ -173,6 +180,7 @@ final class LiveWorkout {
     // MARK: finish
     func finish() -> SavedWorkout? {
         timer?.invalidate()
+        activityController.end(activityState)
         if ble?.state == .connected { ble?.send(.toggleRealtimeHR, payload: [0x00]) }
         guard samples.count >= 10 else { return nil }
         let now = Date().timeIntervalSince1970
@@ -186,6 +194,7 @@ final class LiveWorkout {
 
     func cancel() {
         timer?.invalidate()
+        activityController.end(activityState)
         if ble?.state == .connected { ble?.send(.toggleRealtimeHR, payload: [0x00]) }
     }
 }

@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import ActivityKit
 
 struct SnapshotEntry: TimelineEntry {
     let date: Date
@@ -86,11 +87,52 @@ struct StrapWidgetEntryView: View {
     }
 }
 
+struct WorkoutLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: WorkoutAttributes.self) { ctx in
+            WorkoutLiveView(attrs: ctx.attributes, state: ctx.state)
+                .activityBackgroundTint(Color(.systemBackground).opacity(0.92))
+        } dynamicIsland: { ctx in
+            let zc = WTheme.zone(ctx.state.zone)
+            return DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Label(ctx.attributes.kind, systemImage: ctx.attributes.icon).font(.caption.bold()).foregroundStyle(zc)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text(timerInterval: ctx.attributes.startedAt...Date.distantFuture, countsDown: false).font(.caption.monospacedDigit()).frame(maxWidth: 70, alignment: .trailing)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(ctx.state.bpm > 0 ? "\(ctx.state.bpm)" : "—").font(.system(size: 38, weight: .bold, design: .rounded)).foregroundStyle(zc)
+                        Text("bpm · Z\(ctx.state.zone)").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    HStack {
+                        Text(String(format: "%.0f kcal", ctx.state.kcal)).font(.caption.bold())
+                        Spacer()
+                        Text("target \(ctx.attributes.targetLow)–\(ctx.attributes.targetHigh)").font(.caption2).foregroundStyle(ctx.state.inTarget ? Color.secondary : Color.orange)
+                        Spacer()
+                        Text(ctx.state.effort.map { String(format: "effort %.0f", $0) } ?? "effort —").font(.caption.bold())
+                    }
+                }
+            } compactLeading: {
+                Image(systemName: ctx.attributes.icon).foregroundStyle(zc)
+            } compactTrailing: {
+                Text(ctx.state.bpm > 0 ? "\(ctx.state.bpm)" : "—").font(.caption.bold().monospacedDigit()).foregroundStyle(zc)
+            } minimal: {
+                Text(ctx.state.bpm > 0 ? "\(ctx.state.bpm)" : "—").font(.caption2.bold().monospacedDigit()).foregroundStyle(zc)
+            }
+        }
+    }
+}
+
 @main
 struct PersonalWhoopWidgets: WidgetBundle {
     var body: some Widget {
         TodayWidget()
         SleepWidget()
         StrapWidget()
+        WorkoutLiveActivity()
     }
 }
