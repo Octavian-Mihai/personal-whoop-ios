@@ -7,7 +7,6 @@ import WhoopProtocol
 struct MoreView: View {
     @Environment(AppModel.self) private var model
     private func on(_ k: String) -> Bool { !model.ui.hiddenMore.contains(k) }
-    private var compact: Bool { model.isCompact("more") }
 
     var body: some View {
         NavigationStack {
@@ -22,27 +21,16 @@ struct MoreView: View {
                     if on("alarms") { NavigationLink("Alarms & wind-down") { AlarmView() } }
                     NavigationLink("Device & sync") { DeviceView() }
                 }
-                if compact {
-                    Section {
-                        NavigationLink("Backup & restore") { BackupView() }
-                        DisclosureGroup("Advanced") {
-                            if on("fusion") { NavigationLink("Combining sources") { FusionView() } }
-                            if on("testcentre") { NavigationLink("Test Centre") { TestCentreView() } }
-                            NavigationLink("About & honesty rules") { AboutView() }
-                        }
-                    } header: { Text("Data") }
-                } else {
                 Section("Data") {
                     if on("fusion") { NavigationLink("Combining sources") { FusionView() } }
                     NavigationLink("Backup & restore") { BackupView() }
                     if on("testcentre") { NavigationLink("Test Centre") { TestCentreView() } }
                 }
-                }
                 Section("Settings") {
                     NavigationLink("Personalize") { PersonalizeView() }
                     NavigationLink("Profile & preferences") { SettingsView() }
                     NavigationLink("Notifications") { NotificationsView() }
-                    if !compact { NavigationLink("About & honesty rules") { AboutView() } }
+                    NavigationLink("About & honesty rules") { AboutView() }
                 }
             }
             .navigationTitle("More")
@@ -433,16 +421,6 @@ struct PersonalizeView: View {
             }
             Section("Today page cards") {
                 ForEach(TodayCard.allCases) { toggle(\.hiddenCards, $0.rawValue, title: $0.title) }
-            }
-            Section("Compact layouts") {
-                ForEach([("today", "Today"), ("sleep", "Sleep"), ("workouts", "Workouts"), ("trends", "Trends"), ("more", "More")], id: \.0) { key, title in
-                    Toggle(title, isOn: Binding(get: { model.ui.compact.contains(key) }, set: { on in
-                        var ui = model.ui
-                        if on { ui.compact.insert(key) } else { ui.compact.remove(key) }
-                        model.ui = ui
-                    }))
-                }
-                Text("Denser versions of each page — same data, less scrolling.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Charge drivers") {
                 Picker("Show", selection: Binding(get: { model.ui.driverDisplay }, set: { var u = model.ui; u.driverDisplay = $0; model.ui = u })) {

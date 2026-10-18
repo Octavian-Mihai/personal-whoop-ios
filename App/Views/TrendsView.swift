@@ -6,7 +6,6 @@ struct TrendsView: View {
     @Environment(AppModel.self) private var model
     @State private var range = 30
     @State private var detail: MetricKind?
-    private var compact: Bool { model.isCompact("trends") }
 
     private var slice: [DailyMetric] { Array(model.days.suffix(range)) }
 
@@ -16,13 +15,7 @@ struct TrendsView: View {
                     Text("30d").tag(30); Text("60d").tag(60)
                 }.pickerStyle(.segmented)
 
-                if compact { tileGrid } else {
-                    line("Charge", \.charge, .green, "charge")
-                    line("HRV (ms)", \.hrv, .teal, "hrv")
-                    line("Resting HR (bpm)", \.restingHR, .red, "rhr")
-                    line("Effort", \.effort, .blue, "effort")
-                    line("Rest", \.rest, .purple, "")
-                }
+                tileGrid
                 loadCard
                 digestCard
                 Disclaimer()
@@ -63,25 +56,6 @@ struct TrendsView: View {
                 .background(Color.cardBG, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
                 .contentShape(Rectangle()).onTapGesture { detail = k }
-            }
-        }
-    }
-
-    private func line(_ title: String, _ kp: KeyPath<DailyMetric, Double?>, _ color: Color, _ key: String) -> some View {
-        let vals = slice.compactMap { $0[keyPath: kp] }
-        let s = Summary.of(vals)
-        let dir = key.isEmpty ? TrendDirection.flat : RangeReport.trend(key, values: vals)
-        return Card(title: title, subtitle: s.map { String(format: "mean %.1f · min %.0f · max %.0f", $0.mean, $0.min, $0.max) }) {
-            Chart(slice) { d in
-                if let v = d[keyPath: kp] { LineMark(x: .value("Day", d.date), y: .value(title, v)).foregroundStyle(color).interpolationMethod(.catmullRom) }
-            }
-            .chartYScale(domain: .automatic(includesZero: false)).frame(height: 120)
-            if !key.isEmpty {
-                let lowerBetter = key == "rhr"
-                let good = (dir == .up && !lowerBetter) || (dir == .down && lowerBetter)
-                Label(dir == .flat ? "Flat" : (dir == .up ? "Trending up" : "Trending down"),
-                      systemImage: dir == .flat ? "arrow.right" : (dir == .up ? "arrow.up.right" : "arrow.down.right"))
-                    .font(.caption).foregroundStyle(dir == .flat ? Color.secondary : (good ? .green : .orange))
             }
         }
     }

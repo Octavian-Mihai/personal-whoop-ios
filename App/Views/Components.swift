@@ -278,19 +278,21 @@ struct VitalRow: View {
     var delta: Double?
     var deltaFormat: String = "%+.0f"
     var higherIsBetter = true
+    var onDark = false
     var tint: Color
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: icon).font(.caption).foregroundStyle(tint).frame(width: 16)
             VStack(alignment: .leading, spacing: 0) {
-                Text(label).font(.caption2).foregroundStyle(.secondary)
-                Text(value).font(.subheadline.weight(.semibold).monospacedDigit())
+                Text(label).font(.caption2).foregroundStyle(onDark ? Color.white.opacity(0.8) : .secondary)
+                Text(value).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(onDark ? Color.white : Color.primary)
             }
             Spacer(minLength: 2)
             if let d = delta, abs(d) > 0.0001 {
                 let good = (d > 0) == higherIsBetter
-                Text(String(format: deltaFormat, d)).font(.caption2.weight(.bold).monospacedDigit())
-                    .foregroundStyle(good ? Palette.sage : Palette.clay)
+                Label(String(format: deltaFormat, d), systemImage: d > 0 ? "arrow.up.right" : "arrow.down.right")
+                    .font(.caption2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(onDark ? Color.white : (good ? Palette.sage : Palette.clay))
             }
         }
         .contentShape(Rectangle())

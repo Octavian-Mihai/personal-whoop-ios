@@ -35,7 +35,6 @@ final class AppModel {
         return dir.appendingPathComponent("personalwhoop.json")
     }()
 
-    func isCompact(_ screen: String) -> Bool { ui.compact.contains(screen) }
     var ui: UISettings { get { snapshot.ui ?? UISettings() } set { snapshot.ui = newValue; save() } }
     var settings: AppSettings { get { snapshot.settings } set { snapshot.settings = newValue; save() } }
     var days: [DailyMetric] { snapshot.days }
@@ -43,9 +42,6 @@ final class AppModel {
 
     init() {
         load()
-        // Dev hooks for comparing layouts: -compactAll / -compactNone
-        if CommandLine.arguments.contains("-compactAll") { var u = ui; u.compact = ["today", "sleep", "workouts", "trends", "more"]; snapshot.ui = u }
-        if CommandLine.arguments.contains("-compactNone") { var u = ui; u.compact = []; snapshot.ui = u }
         ble.onHR = { [weak self] bpm, rr in self?.ingestLive(bpm: bpm, rr: rr) }
         recompute()
         loadRawAsync()

@@ -12,16 +12,12 @@ enum SnapshotExporter {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("snaps")
         try? FileManager.default.removeItem(at: dir)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let all: Set<String> = ["today", "sleep", "workouts", "trends", "more"]
-        for (modeName, compact) in [("original", false), ("compact", true)] {
-            var ui = model.ui; ui.compact = compact ? all : []; model.ui = ui
-            try? await Task.sleep(for: .milliseconds(300))
+        for modeName in ["current"] {
             render(TodayView(snapshot: true), tint: Palette.mintRich[0], name: "today-\(modeName)", dir: dir, model: model)
             render(SleepView(snapshot: true), tint: Palette.lavenderRich[0], name: "sleep-\(modeName)", dir: dir, model: model)
             render(WorkoutsView(snapshot: true), tint: Palette.peach[0], name: "workouts-\(modeName)", dir: dir, model: model)
             render(TrendsView(snapshot: true), tint: Palette.mint[0], name: "trends-\(modeName)", dir: dir, model: model)
         }
-        var ui = model.ui; ui.compact = []; model.ui = ui
         SnapshotMode.on = false
         try? "done".write(to: dir.appendingPathComponent("DONE"), atomically: true, encoding: .utf8)
     }
