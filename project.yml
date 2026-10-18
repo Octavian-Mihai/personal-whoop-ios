@@ -1,0 +1,32 @@
+name: PersonalWhoop
+options:
+  bundleIdPrefix: com.octa
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  StrandAnalytics:
+    path: Packages/StrandAnalytics
+targets:
+  PersonalWhoop:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - package: StrandAnalytics
+        product: StrandAnalytics
+      - package: StrandAnalytics
+        product: WhoopProtocol
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Personal Whoop
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSBluetoothAlwaysUsageDescription: Connects to your heart-rate strap or WHOOP to read live data.
+        UIBackgroundModes: [bluetooth-central]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.octa.personalwhoop
+        SWIFT_VERSION: "5.9"
