@@ -29,6 +29,7 @@ struct MoreView: View {
                 }
                 Section("Data & about") {
                     NavigationLink { HealthView() } label: { Label("Apple Health", systemImage: "heart.text.square") }
+                    NavigationLink { ImportBackupView() } label: { Label("Import from another app", systemImage: "square.and.arrow.down") }
                     NavigationLink { BackupView() } label: { Label("Backup & restore", systemImage: "externaldrive") }
                     if on("fusion") { NavigationLink { FusionView() } label: { Label("Combining sources", systemImage: "square.stack.3d.up") } }
                     if on("testcentre") { NavigationLink { TestCentreView() } label: { Label("Test Centre", systemImage: "stethoscope") } }

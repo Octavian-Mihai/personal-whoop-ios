@@ -7,6 +7,7 @@ struct WorkoutsView: View {
     @Environment(AppModel.self) private var model
     @State private var showAdd = false
     @State private var showStart = false
+    @State private var showAllHistory = false
 
     private func kind(_ sport: String) -> WorkoutKind { WorkoutKind(rawValue: sport) ?? .other }
 
@@ -132,7 +133,7 @@ struct WorkoutsView: View {
                     Text("No workouts yet — start one above.").font(.footnote).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity).padding(.vertical, 8)
             }
-            ForEach(model.snapshot.workouts) { w in
+            ForEach(showAllHistory ? model.snapshot.workouts : Array(model.snapshot.workouts.prefix(15))) { w in
                 let k = kind(w.sport)
                 NavigationLink { WorkoutDetailView(workout: w) } label: {
                     HStack(spacing: 12) {
@@ -151,6 +152,9 @@ struct WorkoutsView: View {
                     }
                 }
                 .buttonStyle(.plain)
+            }
+            if model.snapshot.workouts.count > 15 {
+                Button(showAllHistory ? "Show fewer" : "Show all \(model.snapshot.workouts.count)") { withAnimation { showAllHistory.toggle() } }.font(.footnote.weight(.semibold))
             }
         }
     }

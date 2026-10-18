@@ -114,6 +114,7 @@ struct Snapshot: Codable {
     var onboarded: Bool?
     var healthPrefs: HealthPrefs?
     var healthDays: [String: HealthDay]?
+    var importedNights: [SleepSession]?
     var hydration: [HydrationLog] = []
     var workouts: [SavedWorkout] = []
     var liveHR: [HRSample] = []

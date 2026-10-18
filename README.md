@@ -26,3 +26,8 @@ A fresh install asks whether to use demo data or connect a real strap (Settings 
   and can write workouts (with HR samples), sleep stages and water back. HRV is intentionally not imported (SDNN vs RMSSD).
 - A tracked workout shows on the lock screen and in the Dynamic Island (Live Activity: heart rate, zone, timer, kcal, effort).
 - Both need the HealthKit and App Groups capabilities enabled under your own signing team when running on a device.
+
+## Importing a NOOP backup
+Settings → Import from another app reads a `.noopbak` (a ZIP holding `noop-backup.sqlite`, `settings.json`, `manifest.json`): strap-derived
+days (Charge, Effort, Rest, HRV, resting HR…), sleep nights with stages, workouts (last year) and Apple Health history (gap filler).
+The ZIP is streamed and inflated on-device with no third-party code; the SQLite copy is opened read/write because backups are WAL-mode.

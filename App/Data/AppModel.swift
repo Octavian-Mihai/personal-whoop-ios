@@ -79,6 +79,13 @@ final class AppModel {
         // a fresh install stays empty until the first-run choice
     }
 
+    /// Rest score of the day the last night ended on (the hero on Sleep), not necessarily today's row.
+    var lastNightRest: Double? {
+        guard let n = lastNight else { return today?.rest }
+        let key = DayFormat.string(Date(timeIntervalSince1970: n.end))
+        return days.first { $0.day == key }?.rest ?? today?.rest
+    }
+
     var needsOnboarding: Bool { snapshot.onboarded != true }
 
     /// First-run / Settings choice. Demo = synthetic 60 days + a raw day; real = empty history, live data from the strap.
@@ -128,6 +135,7 @@ final class AppModel {
         var updated = snapshot.days
         // real strap, no history yet: keep a row for today so live heart rate can fill Effort, calories and stress
         if !settings.useDemoData, snapshot.onboarded == true, updated.last?.day != DayFormat.string(Date()) { updated.append(DailyMetric(day: DayFormat.string(Date()))) }
+        if raw?.sleep == nil, !settings.useDemoData { lastNight = snapshot.importedNights?.last }
         // fold today's raw-derived night (anchored by the user's bed/wake marks when present) into the last row
         if let raw, let night = effectiveNight(raw), !updated.isEmpty {
             lastNight = night
@@ -153,7 +161,7 @@ final class AppModel {
                                       skinTempDev: m.skinTempDev, previousEffort: prevEffort,
                                       previousEffortBaseline: effortHist.isEmpty ? nil : mean(effortHist), spo2: m.spo2)
             let res = RecoveryScorer.score(inputs, baselines: chargeBase)
-            m.charge = res?.score
+            m.charge = res?.score ?? m.charge
             if i == updated.count - 1 { chargeResult = res }
             if let v = m.hrv { hrvB.fold(v) } else { hrvB.skipNight() }
             if let v = m.restingHR { rhrB.fold(v) } else { rhrB.skipNight() }
@@ -336,6 +344,51 @@ final class AppModel {
     func explainBuzz(_ cause: String, _ text: String) {
         guard settings.notifications.buzzExplain else { return }
         Notifier.post(id: "buzz-cause-\(cause)", title: "Strap buzzed", body: text, silent: true)
+    }
+
+    // MARK: backup import
+    /// Reads a NOOP backup off the main thread, then merges it. Strap-derived days win; Apple Health history only fills gaps.
+    func importNoopBackup(from url: URL, progress: @escaping @Sendable (String) -> Void) async throws -> NoopImportResult {
+        let r = try await Task.detached(priority: .userInitiated) { try NoopBackupImporter.read(url: url, progress: progress) }.value
+        if settings.useDemoData { chooseDataSource(demo: false) }   // demo and real history must never mix
+        applyNoopImport(r)
+        return r
+    }
+
+    private func applyNoopImport(_ r: NoopImportResult) {
+        var map = Dictionary(snapshot.days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
+        for d in r.days {
+            var m = map[d.day] ?? DailyMetric(day: d.day)
+            func take<T>(_ v: T?, _ set: (inout DailyMetric, T) -> Void) { if let v { set(&m, v) } }
+            take(d.hrv) { $0.hrv = $1 }; take(d.restingHR) { $0.restingHR = $1 }; take(d.respiration) { $0.respiration = $1 }
+            take(d.skinTempDev) { $0.skinTempDev = $1 }; take(d.spo2) { $0.spo2 = $1 }
+            take(d.asleepMin) { $0.asleepMin = $1 }; take(d.inBedMin) { $0.inBedMin = $1 }; take(d.deepMin) { $0.deepMin = $1 }
+            take(d.remMin) { $0.remMin = $1 }; take(d.lightMin) { $0.lightMin = $1 }; take(d.awakeMin) { $0.awakeMin = $1 }
+            take(d.rest) { $0.rest = $1 }; take(d.effort) { $0.effort = $1 }; take(d.steps) { $0.steps = $1 }; take(d.kcal) { $0.kcal = $1 }
+            m.workouts = max(m.workouts, d.workouts)
+            m.charge = d.charge ?? m.charge     // recomputed below, but keep imported when the strap provided it
+            map[d.day] = m
+        }
+        snapshot.days = map.values.sorted { $0.day < $1.day }
+        var nights = snapshot.importedNights ?? []
+        let known = Set(nights.map { $0.start })
+        nights.append(contentsOf: r.nights.filter { !known.contains($0.start) })
+        snapshot.importedNights = nights.sorted { $0.start < $1.start }
+        let have = Set(snapshot.workouts.map(\.id))
+        snapshot.workouts.append(contentsOf: r.workouts.filter { !have.contains($0.id) })
+        snapshot.workouts.sort { $0.start > $1.start }
+        snapshot.onboarded = true
+        applyHealth(r.healthDays, workouts: [])     // gap filler (also recomputes and saves)
+    }
+
+    func useBackupProfile(_ p: BackupProfile) {
+        var s = settings
+        if let v = p.age { s.profile.age = v }
+        if let v = p.heightCm { s.profile.heightCm = v }
+        if let v = p.weightKg { s.profile.weightKg = v }
+        if let v = p.hrMax { s.profile.hrMaxOverride = v }
+        settings = s
+        recompute()
     }
 
     // MARK: Apple Health

@@ -121,7 +121,7 @@ struct SleepView: View {
                             .font(.caption).foregroundStyle(.white.opacity(0.75))
                     }
                     Spacer()
-                    Ring(value: model.today?.rest, colors: [Palette.lavender[0], .white], label: "Rest", unit: "%", size: 96, onDark: true)
+                    Ring(value: model.lastNightRest, colors: [Palette.lavender[0], .white], label: "Rest", unit: "%", size: 96, onDark: true)
                 }
                 Chart(Array(n.segments.enumerated()), id: \.offset) { _, s in
                     RectangleMark(xStart: .value("s", Date(timeIntervalSince1970: s.start)), xEnd: .value("e", Date(timeIntervalSince1970: s.end)),
@@ -146,7 +146,7 @@ struct SleepView: View {
 
     private func metrics(_ n: SleepSession) -> some View {
         let m = HypnogramMetrics(session: n)
-        let rest = model.today?.rest
+        let rest = model.lastNightRest
         return Card(title: "Night metrics") {
             HStack {
                 Stat(label: "Rest", value: rest.map { String(format: "%.0f%%", $0) } ?? "—")
