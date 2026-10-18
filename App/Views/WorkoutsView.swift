@@ -15,7 +15,6 @@ struct WorkoutsView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     startHero
-                    intervalCard
                     weekSummary
                     heatmapCard
                     if !model.detected.isEmpty { detectedCard }
@@ -34,32 +33,40 @@ struct WorkoutsView: View {
 
     private var startHero: some View {
         HeroCard(colors: [Palette.peach[0], Palette.rose[0], Palette.lavender[1]]) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Ready to move?").font(.title2.bold()).foregroundStyle(Palette.ink)
-                    Text("Live heart rate, zones and coaching tuned to the activity.").font(.footnote).foregroundStyle(Palette.ink.opacity(0.7))
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Ready to move?").font(.title3.bold()).foregroundStyle(Palette.ink)
+                    Spacer()
+                    NavigationLink { IntervalTimerView() } label: { heroPill("timer", "Intervals") }
+                    Button { showStart = true } label: { heroPill("slider.horizontal.3", nil) }
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         ForEach(WorkoutKind.allCases) { k in
                             Button { model.startWorkout(k) } label: {
-                                VStack(spacing: 6) {
-                                    Image(systemName: k.icon).font(.title3)
+                                VStack(spacing: 4) {
+                                    Image(systemName: k.icon).font(.body)
                                     Text(k.rawValue).font(.caption2.weight(.medium))
                                 }
                                 .foregroundStyle(Palette.ink)
-                                .frame(width: 66, height: 66)
-                                .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .frame(width: 60, height: 54)
+                                .background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
                         }
                     }
                 }
-                Button { showStart = true } label: {
-                    Label("More options", systemImage: "slider.horizontal.3").font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 14).padding(.vertical, 8).background(.white, in: Capsule()).foregroundStyle(Palette.ink)
-                }
             }
         }
+    }
+
+    private func heroPill(_ icon: String, _ text: String?) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.footnote.weight(.semibold))
+            if let text { Text(text).font(.footnote.weight(.semibold)) }
+        }
+        .foregroundStyle(Palette.ink)
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(.white.opacity(0.55), in: Capsule())
     }
 
     private var weekSummary: some View {
@@ -137,25 +144,6 @@ struct WorkoutsView: View {
                 .buttonStyle(.plain)
             }
         }
-    }
-
-    private var intervalCard: some View {
-        NavigationLink { IntervalTimerView() } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "timer").font(.title2).foregroundStyle(Palette.ink)
-                    .frame(width: 52, height: 52).background(.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Interval timer").font(.headline).foregroundStyle(Palette.ink)
-                    Text("Work / rest rounds with wrist buzzes").font(.caption).foregroundStyle(Palette.ink.opacity(0.7))
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(Palette.ink.opacity(0.5))
-            }
-            .padding(14)
-            .background(LinearGradient(colors: Palette.rose, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: Palette.rose[1].opacity(0.3), radius: 10, y: 5)
-        }
-        .buttonStyle(.plain)
     }
 
     private var heatmap: some View {
