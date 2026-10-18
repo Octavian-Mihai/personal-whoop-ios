@@ -5,3 +5,6 @@ DerivedData/
 .DS_Store
 App/Info.plist
 previews/
+App/PersonalWhoop.entitlements
+Widgets/Info.plist
+Widgets/PersonalWhoopWidgets.entitlements

@@ -5,6 +5,9 @@ import StrandAnalytics
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @State private var detail: MetricKind?
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// Side-by-side at normal sizes, stacked when the user's text size is very large.
+    private var adaptive: AnyLayout { typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(spacing: 10)) }
     @State private var allDrivers = false
 
     var content: some View {
@@ -36,7 +39,7 @@ struct TodayView: View {
     private var header: some View {
         let h = Calendar.current.component(.hour, from: Date())
         let greet = h < 12 ? "Good morning" : (h < 18 ? "Good afternoon" : "Good evening")
-        return HStack(alignment: .center) {
+        return adaptive.callAsFunction {
             VStack(alignment: .leading, spacing: 3) {
                 Text(greet).font(.title2.bold()).lineLimit(1).minimumScaleFactor(0.8)
                 HStack(spacing: 8) {
@@ -46,26 +49,38 @@ struct TodayView: View {
                     }
                 }
             }
-            Spacer(minLength: 8)
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
             NavigationLink { DeviceView() } label: {
                 BatteryPill(percent: model.ble.batteryPercent ?? model.ble.lastBattery?.percent,
                             live: model.ble.state == .connected && model.ble.batteryPercent != nil,
                             lastSeen: model.ble.lastBattery?.at)
             }.buttonStyle(.plain)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private func cardView(_ c: TodayCard) -> some View {
         switch c {
         case .illness: if let ill = model.illness, ill.level == .raised { illnessBanner(ill) }
         case .workoutSuggestion: if let s = model.autoSuggestion { workoutSuggestion(s) }
-        case .scores: scoreCard
+        case .scores:
+            if !model.settings.useDemoData && model.today?.charge == nil { waitingCard }
+            scoreCard
         case .drivers: if let r = model.chargeResult { driversCard(r) }
         case .live: liveCard
         case .forecast: if let f = model.forecast { forecastCard(f) }
         case .stress: stressCard
         case .hydration: hydrationCard
         case .readiness: if !model.readiness.isEmpty { readinessCard }
+        }
+    }
+
+    /// Real-strap mode before there is any history.
+    private var waitingCard: some View {
+        Card(title: "Getting to know you", subtitle: "Charge needs about 4 nights of data; Effort and stress start from live heart rate", icon: "hourglass") {
+            Text(model.ble.state == .connected ? "Strap connected — keep it on, including overnight." : "Your strap isn't connected yet. Keep it on your wrist and nearby, with Bluetooth on.")
+                .font(.footnote).foregroundStyle(.secondary)
+            if model.ble.state != .connected { Button("Connect strap") { model.ble.connect() }.buttonStyle(.borderedProminent).controlSize(.small) }
         }
     }
 
@@ -80,7 +95,7 @@ struct TodayView: View {
     private func workoutSuggestion(_ s: (start: Double, end: Double)) -> some View {
         Card(title: "Did you just work out?") {
             Text("\(fmtClock(s.start))–\(fmtClock(s.end)) · \(fmtDuration((s.end - s.start) / 60)) of elevated heart rate").font(.footnote)
-            HStack(spacing: 10) {
+            adaptive.callAsFunction {
                 Button {
                     model.addWorkout(SavedWorkout(sport: "Workout", start: s.start, end: s.end, avgHR: nil, peakHR: nil, kcal: nil, effort: nil, distanceM: nil, source: "detected"))
                 } label: { Label("Yes, save it", systemImage: "checkmark").frame(maxWidth: .infinity) }
@@ -102,7 +117,7 @@ struct TodayView: View {
         let b = model.baselines
         return VStack(spacing: 12) {
             HeroCard(colors: Palette.mintRich) {
-                HStack(spacing: 12) {
+                adaptive.callAsFunction {
                     Ring(value: t?.charge, colors: [.white.opacity(0.85), .white], label: "Charge", unit: "%", size: 128, onDark: true, textColor: .white)
                         .onTapGesture { detail = .charge }
                     VStack(alignment: .leading, spacing: 9) {
@@ -210,7 +225,7 @@ struct TodayView: View {
 
     private var stressCard: some View {
         Card(title: "Stress today", subtitle: nil, icon: "brain.head.profile") {
-            if model.stressHours.isEmpty { Text("Not enough heart-rate data yet").font(.footnote).foregroundStyle(.secondary) }
+            if model.stressHours.isEmpty { Label("Needs a few waking hours of heart-rate data — this fills in as your day goes on.", systemImage: "clock").font(.footnote).foregroundStyle(.secondary) }
             else {
                 Chart(model.stressHours) { h in
                     if let s = h.score {

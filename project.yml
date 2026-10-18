@@ -10,12 +10,17 @@ targets:
   PersonalWhoop:
     type: application
     platform: iOS
-    sources: [App]
+    sources: [App, Shared]
+    entitlements:
+      path: App/PersonalWhoop.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.octa.personalwhoop]
     dependencies:
       - package: StrandAnalytics
         product: StrandAnalytics
       - package: StrandAnalytics
         product: WhoopProtocol
+      - target: PersonalWhoopWidgets
     info:
       path: App/Info.plist
       properties:
@@ -31,3 +36,22 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.octa.personalwhoop
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  PersonalWhoopWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [Widgets, Shared]
+    entitlements:
+      path: Widgets/PersonalWhoopWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.octa.personalwhoop]
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Personal Whoop
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.octa.personalwhoop.widgets
+        SWIFT_VERSION: "5.9"
+        SKIP_INSTALL: YES

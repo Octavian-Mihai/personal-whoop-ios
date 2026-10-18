@@ -326,6 +326,16 @@ struct TestCentreView: View {
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmSource = false
+    @State private var pendingSource = true
+
+    private func autoBinding(_ kp: WritableKeyPath<AppSettings, Bool>) -> Binding<Bool> {
+        Binding(get: { model.settings[keyPath: kp] }, set: { on in
+            model.settings[keyPath: kp] = on
+            if on { Notifier.requestPermission() }
+        })
+    }
+
     var body: some View {
         Form {
             Section("Profile") {
@@ -339,15 +349,26 @@ struct SettingsView: View {
             Section("Display") {
                 Toggle("Effort on 0–21 scale", isOn: Binding(get: { model.settings.effortOn21Scale }, set: { model.settings.effortOn21Scale = $0 }))
             }
-            Section("Automations (opt-in)") {
-                Toggle("HR-zone coaching", isOn: Binding(get: { model.settings.zoneCoach }, set: { model.settings.zoneCoach = $0 }))
-                Toggle("Inactivity reminder", isOn: Binding(get: { model.settings.sedentaryReminder }, set: { model.settings.sedentaryReminder = $0 }))
-                Toggle("Stress check-in nudge", isOn: Binding(get: { model.settings.stressNudge }, set: { model.settings.stressNudge = $0 }))
+            Section {
+                Toggle("HR-zone coaching", isOn: autoBinding(\.zoneCoach))
+                Toggle("Stress check-in nudge", isOn: autoBinding(\.stressNudge))
+                Toggle("Inactivity reminder", isOn: autoBinding(\.sedentaryReminder))
+            } header: { Text("Strap buzzes (opt-in)") } footer: {
+                Text("Zone coaching buzzes 3× on entering your top zone and 1× when you settle. The stress nudge fires when HRV dips for a minute while you're at rest. The inactivity reminder is approximate — it uses heart rate only until the strap's motion data is available. All need a connected strap; turn on \"Explain strap buzzes\" in Notifications to learn why one fired.")
             }
-            Section("Data") {
-                Toggle("Demo data", isOn: Binding(get: { model.settings.useDemoData }, set: { model.settings.useDemoData = $0 }))
+            Section {
+                Picker("Data source", selection: Binding(get: { model.settings.useDemoData }, set: { pendingSource = $0; confirmSource = true })) {
+                    Text("Demo data").tag(true); Text("My WHOOP").tag(false)
+                }.pickerStyle(.segmented)
+            } header: { Text("Data") } footer: {
+                Text(model.settings.useDemoData ? "You're seeing made-up data so you can explore. Switch to My WHOOP to use your own strap — history starts empty and fills from live heart rate." : "Showing only what your strap has reported to this phone.")
             }
-        }.navigationTitle("Profile & units")
+        }
+        .confirmationDialog("Switch data source?", isPresented: $confirmSource, titleVisibility: .visible) {
+            Button(pendingSource ? "Switch to demo data" : "Switch to My WHOOP", role: .destructive) { model.chooseDataSource(demo: pendingSource) }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("This replaces the scores and trends currently shown. Your workouts and water log are kept.") }
+.navigationTitle("Profile & units")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

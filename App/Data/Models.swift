@@ -110,6 +110,8 @@ struct Snapshot: Codable {
     var ui: UISettings?
     var dismissedSuggestions: [Double]?
     var sleepMarks: [SleepMark]?
+    /// nil on a fresh install: the first-run screen asks whether to use demo data or a real strap.
+    var onboarded: Bool?
     var hydration: [HydrationLog] = []
     var workouts: [SavedWorkout] = []
     var liveHR: [HRSample] = []

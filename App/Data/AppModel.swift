@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import StrandAnalytics
 import UserNotifications
+import WidgetKit
 
 @Observable
 @MainActor
@@ -30,6 +31,15 @@ final class AppModel {
     var live: LiveWorkout?
     /// Snooze chain: how many times the alarm has been re-armed this morning, and when it rings next.
     var snoozeCount = 0
+    // automations
+    private var zoneWindow: [Double] = []
+    private var lastZone = 0
+    private var rrBuffer: [Double] = []
+    private var stressDetector = StressOnsetDetector()
+    private var sedentary = SedentaryDetector()
+    private var batteryState: BatteryAlertState = {
+        (UserDefaults.standard.data(forKey: "batteryAlertState").flatMap { try? JSONDecoder().decode(BatteryAlertState.self, from: $0) }) ?? BatteryAlertState()
+    }()
     var snoozeUntil: Date?
 
     let ble = BLEManager()
@@ -46,7 +56,9 @@ final class AppModel {
 
     init() {
         load()
+        UNUserNotificationCenter.current().delegate = Notifier.Delegate.shared
         ble.onHR = { [weak self] bpm, rr in self?.ingestLive(bpm: bpm, rr: rr) }
+        ble.onBattery = { [weak self] pct in self?.batteryUpdated(pct) }
         recompute()
         loadRawAsync()
         let nc = NotificationCenter.default
@@ -57,12 +69,35 @@ final class AppModel {
 
     // MARK: persistence
     func load() {
-        if let d = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(Snapshot.self, from: d), !s.days.isEmpty {
+        if let d = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(Snapshot.self, from: d) {
             snapshot = s
-        } else {
-            snapshot.days = DemoData.history()
+            // anyone who already had data before the first-run screen existed counts as onboarded
+            if snapshot.onboarded == nil, !s.days.isEmpty { snapshot.onboarded = true }
         }
+        // a fresh install stays empty until the first-run choice
     }
+
+    var needsOnboarding: Bool { snapshot.onboarded != true }
+
+    /// First-run / Settings choice. Demo = synthetic 60 days + a raw day; real = empty history, live data from the strap.
+    func chooseDataSource(demo: Bool) {
+        var s = settings; s.useDemoData = demo; snapshot.settings = s
+        snapshot.onboarded = true
+        if demo {
+            snapshot.days = DemoData.history()
+            raw = nil
+            recompute()
+            loadRawAsync()
+        } else {
+            snapshot.days = []
+            raw = nil
+            snapshot.liveHR = []
+            recompute()
+            ble.connect()
+        }
+        save()
+    }
+
     /// Raw synthetic streams are generated off the main thread so the first frame isn't blocked.
     func loadRawAsync(seed: UInt64 = 11) {
         guard settings.useDemoData else { return }
@@ -85,9 +120,12 @@ final class AppModel {
     // MARK: analysis pipeline (per spec §1: raw → analyzeDay → DailyMetric)
     func recompute() {
         let s = settings.profile
+        if !settings.useDemoData { raw = realRaw() }
         var hrvB = Baseline(metric: .hrv), rhrB = Baseline(metric: .restingHR), respB = Baseline(metric: .respiration)
         var effortHist: [Double] = []
         var updated = snapshot.days
+        // real strap, no history yet: keep a row for today so live heart rate can fill Effort, calories and stress
+        if !settings.useDemoData, snapshot.onboarded == true, updated.last?.day != DayFormat.string(Date()) { updated.append(DailyMetric(day: DayFormat.string(Date()))) }
         // fold today's raw-derived night (anchored by the user's bed/wake marks when present) into the last row
         if let raw, let night = effectiveNight(raw), !updated.isEmpty {
             lastNight = night
@@ -157,12 +195,23 @@ final class AppModel {
                                                  needHours: sleepNeedMin / 60, slopePerDay: slope)
         }
         updateIllness()
+        checkIllnessNotification()
+        checkStrainTarget()
         updateVitality()
         updateCircadian()
         updateInsights()
         let qualifying = Set(updated.filter { $0.charge != nil }.map(\.day))
         streak = StreakCalculator.streaks(days: qualifying, today: DayFormat.string(Date()))
         save()
+        syncWidgets()
+    }
+
+    /// Today's live heart-rate readings as a raw day (no gravity or beat intervals over the standard HR profile).
+    private func realRaw() -> RawDay? {
+        let start = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
+        let hr = snapshot.liveHR.filter { $0.t >= start }
+        guard hr.count > 1 else { return nil }
+        return RawDay(hr: hr, gravity: [], rr: [], sleep: nil, workouts: [])
     }
 
     private func updateIllness() {
@@ -236,7 +285,104 @@ final class AppModel {
         let now = Date().timeIntervalSince1970
         snapshot.liveHR.append(HRSample(t: now, bpm: Double(bpm)))
         if snapshot.liveHR.count > 20_000 { snapshot.liveHR.removeFirst(2_000) }
+        guard live == nil else { return }          // a tracked workout has its own coach
+        runAutomations(bpm: Double(bpm), rr: rr, now: now)
     }
+
+    /// Opt-in strap buzzes: zone coaching, stress check-in, inactivity reminder. Each can explain itself with a silent notification.
+    private func runAutomations(bpm: Double, rr: [Double], now: Double) {
+        let cal = Calendar.current
+        let hour = cal.component(.hour, from: Date(timeIntervalSince1970: now))
+        let rhr = today?.restingHR ?? 60
+
+        // HR-zone coach: median of ~10 readings, buzz on entering zone 5 / dropping to zone ≤ 1
+        zoneWindow.append(bpm); if zoneWindow.count > 10 { zoneWindow.removeFirst() }
+        if settings.zoneCoach, zoneWindow.count >= 5 {
+            let z = HRZones(age: settings.profile.age, override: settings.profile.hrMaxOverride).zone(for: median(zoneWindow))
+            if let cue = ZoneCoach.cue(previous: lastZone, current: z) {
+                ble.buzz(loops: UInt8(cue.loops))
+                explainBuzz("zone", cue.cue == .enteredTop ? "You entered your top heart-rate zone. Ease off." : "Your heart rate settled back down.")
+            }
+            lastZone = z
+        } else if zoneWindow.count >= 5 { lastZone = HRZones(age: settings.profile.age, override: settings.profile.hrMaxOverride).zone(for: median(zoneWindow)) }
+
+        // Stress check-in: fast RMSSD dip that holds for 60 s while resting
+        if settings.stressNudge, !rr.isEmpty {
+            rrBuffer.append(contentsOf: rr); if rrBuffer.count > 60 { rrBuffer.removeFirst(rrBuffer.count - 60) }
+            let quiet = hour >= 22 || hour < 7
+            if rrBuffer.count >= 30, stressDetector.ingest(now: now, rr60: rrBuffer, hr: bpm, still: (55...100).contains(bpm), quietHours: quiet) {
+                ble.buzz(loops: 2)
+                explainBuzz("stress", "Your heart-rate variability dipped for a minute. Take a slow breath?")
+                Notifier.post(id: "stress-nudge", title: "Stress check-in", body: "Your HRV dipped while you were resting. A minute of slow breathing can help.")
+            }
+        }
+
+        // Inactivity: heart-rate-only proxy until the strap's motion stream is decoded (approximate)
+        if settings.sedentaryReminder {
+            let pseudoMotion = bpm > rhr + 12 ? 0.3 : 0.05
+            if sedentary.ingest(t: now, smoothedMotion: pseudoMotion, hour: hour) {
+                ble.buzz(loops: 2)
+                explainBuzz("inactivity", "You've been still for a while. Time to move.")
+                Notifier.post(id: "inactivity", title: "Time to move", body: "You've been sitting for a while.")
+            }
+        }
+    }
+
+    /// "Why did my strap buzz?" — a silent, passive notification naming the automation. Explains, never triggers.
+    func explainBuzz(_ cause: String, _ text: String) {
+        guard settings.notifications.buzzExplain else { return }
+        Notifier.post(id: "buzz-cause-\(cause)", title: "Strap buzzed", body: text, silent: true)
+    }
+
+    // MARK: widgets
+    /// Shares today's numbers with the home/lock-screen widgets and asks them to refresh.
+    func syncWidgets() {
+        let t = today
+        let battery = ble.batteryPercent ?? ble.lastBattery?.percent
+        WidgetSnapshot(charge: t?.charge, effort: t?.effort, rest: t?.rest, hrv: t?.hrv, restingHR: t?.restingHR,
+                       batteryPercent: battery, batteryAt: ble.lastBattery?.at, nextAlarm: nextAlarm,
+                       updated: Date(), isDemo: settings.useDemoData).save()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    // MARK: notifications
+    private func batteryUpdated(_ pct: Double) {
+        syncWidgets()
+        guard settings.notifications.batteryAlerts else { return }
+        let alerts = BatteryNotifier.evaluate(soc: pct, charging: nil, runtimeHours: nil, state: &batteryState)
+        if let d = try? JSONEncoder().encode(batteryState) { UserDefaults.standard.set(d, forKey: "batteryAlertState") }
+        for a in alerts {
+            switch a {
+            case .critical: Notifier.post(id: "battery-critical", title: "Strap battery critical", body: String(format: "%.0f%% — charge it now, it stops recording near 10%%.", pct))
+            case .low: Notifier.post(id: "battery-low", title: "Strap battery low", body: String(format: "%.0f%% left.", pct))
+            case .full: Notifier.post(id: "battery-full", title: "Strap fully charged", body: "You can take it off the charger.")
+            case .runtime, .bedtime: break
+            }
+        }
+    }
+
+    private func notifyOncePerDay(_ key: String, _ send: () -> Void) {
+        let today = DayFormat.string(Date())
+        guard UserDefaults.standard.string(forKey: key) != today else { return }
+        UserDefaults.standard.set(today, forKey: key)   // marked up front so it can't repeat even if delivery is declined
+        send()
+    }
+
+    private func checkStrainTarget() {
+        guard settings.notifications.strainTarget, let t = today, let e = t.effort,
+              StrainTarget.reached(effort100: e, charge: t.charge) else { return }
+        notifyOncePerDay("strainNotifiedDay") {
+            Notifier.post(id: "strain-target", title: "Optimal strain reached", body: "You've reached the effort that suits today's Charge.")
+        }
+    }
+
+    private func checkIllnessNotification() {
+        guard settings.notifications.illness, illness?.level == .raised else { return }
+        notifyOncePerDay("illnessNotifiedDay") {
+            Notifier.post(id: "illness", title: "A heads-up to rest", body: "On-device estimate (approximate), not a diagnosis.")
+        }
+    }
+
 
     // MARK: sleep marks
     var sleepMarks: [SleepMark] { (snapshot.sleepMarks ?? []).sorted { $0.time < $1.time } }
@@ -289,6 +435,7 @@ final class AppModel {
 
     /// Arms the strap + phone backup for the next wake time and schedules the wind-down nudge.
     func applyAlarm() {
+        defer { syncWidgets() }
         let a = settings.alarm
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: ["alarm-backup", "wind-down"])

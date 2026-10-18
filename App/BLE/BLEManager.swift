@@ -22,6 +22,7 @@ final class BLEManager: NSObject {
     var lastFrameCount = 0
     var wristOn: Bool?
     var onHR: ((Int, [Double]) -> Void)?
+    var onBattery: ((Double) -> Void)?
     var hrWindow: [(t: Double, bpm: Double)] = []
 
     private var central: CBCentralManager!
@@ -46,6 +47,7 @@ final class BLEManager: NSObject {
         lastBattery = (v, Date())
         UserDefaults.standard.set(v, forKey: "lastBatteryPct")
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastBatteryAt")
+        onBattery?(v)
     }
 
     private func note(_ s: String) {

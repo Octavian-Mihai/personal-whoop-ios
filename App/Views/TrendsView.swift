@@ -51,7 +51,8 @@ struct TrendsView: View {
                         Text(k.title.replacingOccurrences(of: "Heart-rate variability", with: "HRV").replacingOccurrences(of: "Resting heart rate", with: "Resting HR")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Text(s.map { String(format: k == .respiration ? "%.1f" : "%.0f", $0.mean) + k.unit } ?? "—").font(.title3.weight(.semibold).monospacedDigit())
-                    Sparkline(values: vals, color: k.colors[1]).frame(height: 34)
+                    if vals.count > 1 { Sparkline(values: vals, color: k.colors[1]).frame(height: 34) }
+                else { Text("No data yet").font(.caption2).foregroundStyle(.tertiary).frame(height: 34, alignment: .bottomLeading) }
                 }
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.cardBG, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -67,11 +68,16 @@ struct TrendsView: View {
             else {
                 Chart {
                     ForEach(model.trainingLoad) { p in
-                        LineMark(x: .value("Day", p.index), y: .value("v", p.fitness), series: .value("s", "Fitness")).foregroundStyle(.blue)
-                        LineMark(x: .value("Day", p.index), y: .value("v", p.fatigue), series: .value("s", "Fatigue")).foregroundStyle(.orange)
+                        LineMark(x: .value("Day", p.index), y: .value("v", p.fitness), series: .value("s", "Fitness")).foregroundStyle(Palette.skyRich[1]).interpolationMethod(.catmullRom)
+                        LineMark(x: .value("Day", p.index), y: .value("v", p.fatigue), series: .value("s", "Fatigue")).foregroundStyle(Palette.peach[1]).interpolationMethod(.catmullRom)
                     }
                 }.frame(height: 140)
-                if let l = model.trainingLoad.last { Text(String(format: "Form (TSB): %+.1f", l.form)).font(.footnote.monospacedDigit()) }
+                HStack(spacing: 14) {
+                    HStack(spacing: 5) { Circle().fill(Palette.skyRich[1]).frame(width: 8, height: 8); Text("Fitness (42 d)").font(.caption2).foregroundStyle(.secondary) }
+                    HStack(spacing: 5) { Circle().fill(Palette.peach[1]).frame(width: 8, height: 8); Text("Fatigue (7 d)").font(.caption2).foregroundStyle(.secondary) }
+                    Spacer()
+                    if let l = model.trainingLoad.last { Text(String(format: "Form %+.1f", l.form)).font(.footnote.weight(.semibold).monospacedDigit()) }
+                }
             }
         }
     }
