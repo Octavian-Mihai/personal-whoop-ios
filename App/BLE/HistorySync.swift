@@ -21,6 +21,13 @@ final class HistorySync {
         (UserDefaults.standard.data(forKey: "syncEstimate").flatMap { try? JSONDecoder().decode(SyncEstimate.self, from: $0) }) ?? SyncEstimate()
     }()
     var storedCount = 0
+    /// 0…1 while receiving, from how far the received timestamps have advanced toward "now"; nil until it can be judged.
+    var progress: Double?
+    /// Seconds left, extrapolated from how fast the strap is delivering time so far in this run.
+    var etaSeconds: Double?
+    /// Set when a link drop or stall cut a sync short, so the next connection resumes it without being asked.
+    private(set) var interrupted = false
+    private var retries = 0
 
     let store = HistoryStore()
     weak var ble: BLEManager?
@@ -55,7 +62,9 @@ final class HistorySync {
     func start(manual: Bool) {
         guard isConnected(), !isActive else { return }
         let now = Date().timeIntervalSince1970
-        guard manual || policy.allowed(.periodic, now: now, strapFutureDated: false) else { return }
+        let resuming = interrupted
+        guard manual || resuming || policy.allowed(.periodic, now: now, strapFutureDated: false) else { return }
+        interrupted = false; progress = nil; etaSeconds = nil
         phase = .requesting; recordsDecoded = 0; chunks = 0; oldest = nil; newest = nil
         nDecoded = 0; nChunks = 0; firstTs = nil; lastTs = nil; pending = []
         startedAt = Date(); gapAtStart = lastCompleted.map { Date().timeIntervalSince($0) } ?? 0
@@ -67,7 +76,17 @@ final class HistorySync {
     func cancel() {
         guard isActive else { return }
         send(.abortHistoricalTransmits)
+        interrupted = false; retries = 0
         finish(.idle)
+    }
+
+    /// The Bluetooth link dropped mid-sync. Keep what is saved; the next connection picks up where the strap left off.
+    func connectionLost() {
+        guard isActive else { return }
+        let batch = pending; pending = []
+        Task { await store.append(batch); storedCount = await store.count }
+        interrupted = true
+        finish(.failed("Connection lost — will resume automatically when the strap is back."))
     }
 
     /// Called for every type-47 (record) and type-49 (metadata) frame.
@@ -92,6 +111,7 @@ final class HistorySync {
         case .complete:
             phase = .finishing
             let batch = pending; pending = []
+            retries = 0
             Task {
                 await store.append(batch)
                 storedCount = await store.count
@@ -117,7 +137,16 @@ final class HistorySync {
             Task { @MainActor in
                 guard let self, self.isActive else { return }
                 self.send(.abortHistoricalTransmits)
-                self.finish(.failed("The strap stopped sending. Unacknowledged data will be offered again next time."))
+                // Retry on its own a few times (the strap re-offers anything unacknowledged) before giving up.
+                if self.retries < 3, self.isConnected() {
+                    self.retries += 1; self.interrupted = true
+                    self.finish(.failed("The strap stopped sending — retrying…"))
+                    try? await Task.sleep(for: .seconds(3))
+                    self.start(manual: true)
+                } else {
+                    self.retries = 0
+                    self.finish(.failed("The strap stopped sending. Unacknowledged data will be offered again next time."))
+                }
             }
         }
     }
@@ -130,6 +159,17 @@ final class HistorySync {
 
     private func publish() {
         recordsDecoded = nDecoded; chunks = nChunks
+        if phase == .finishing { progress = 1; etaSeconds = nil }
+        else if let f = firstTs, let l = lastTs, let t0 = startedAt, nDecoded > 0 {
+            let now = Date().timeIntervalSince1970
+            let total = now - Double(f), done = Double(l) - Double(f)
+            let elapsed = Date().timeIntervalSince(t0)
+            if total > 60 {
+                let frac = min(max(done / total, 0), 0.99)
+                progress = frac
+                etaSeconds = elapsed >= 8 && frac > 0.01 ? elapsed * (1 - frac) / frac : nil
+            }
+        }
         oldest = firstTs.map { Date(timeIntervalSince1970: Double($0)) }; newest = lastTs.map { Date(timeIntervalSince1970: Double($0)) }
     }
 

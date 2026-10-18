@@ -25,6 +25,9 @@ final class BLEManager: NSObject {
     var onBattery: ((Double) -> Void)?
     var onHistoryFrame: ((Frame) -> Void)?
     var onReady: (() -> Void)?
+    var onDisconnect: (() -> Void)?
+    /// While true the 30 s battery/RSSI poll is skipped so it doesn't compete with a bulk history download.
+    var isBusy: () -> Bool = { false }
     var hrWindow: [(t: Double, bpm: Double)] = []
 
     private var central: CBCentralManager!
@@ -112,7 +115,7 @@ final class BLEManager: NSObject {
     private func startKeepAlive() {
         keepAlive?.invalidate()
         keepAlive = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.requestBattery(); self?.peripheral?.readRSSI() }
+            Task { @MainActor in guard let self, !self.isBusy() else { return }; self.requestBattery(); self.peripheral?.readRSSI() }
         }
     }
 
@@ -151,6 +154,7 @@ extension BLEManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         Task { @MainActor in
             note("Disconnected")
             state = .idle; heartRate = nil; cmdChar = nil; keepAlive?.invalidate()
+            onDisconnect?()
             // Standing connect: no timeout, iOS wakes the app when the strap returns.
             if wantConnect { state = .connecting; central.connect(p) }
         }

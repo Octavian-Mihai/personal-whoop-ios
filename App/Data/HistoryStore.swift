@@ -84,8 +84,10 @@ actor HistoryStore {
         if let h = try? FileHandle(forWritingTo: url) {
             _ = try? h.seekToEnd(); try? h.write(contentsOf: data); try? h.close()
         } else { try? data.write(to: url) }
+        // Chunks arrive roughly in order, so only pay for a full sort when something lands before the current end.
+        let needsSort = (fresh.first?.unix ?? 0) < (records.last?.unix ?? 0) || zip(fresh, fresh.dropFirst()).contains { $0.unix > $1.unix }
         records.append(contentsOf: fresh)
-        records.sort { $0.unix < $1.unix }
+        if needsSort { records.sort { $0.unix < $1.unix } }
         return fresh.count
     }
 

@@ -70,7 +70,9 @@ final class AppModel {
         history.ble = ble
         history.isConnected = { [weak self] in self?.ble.state == .connected }
         ble.onHistoryFrame = { [weak self] f in self?.history.handle(f) }
-        ble.onReady = { [weak self] in self?.history.start(manual: false) }
+        ble.onReady = { [weak self] in self?.history.start(manual: false) }   // an interrupted sync resumes regardless of the 15-minute floor
+        ble.onDisconnect = { [weak self] in self?.history.connectionLost() }
+        ble.isBusy = { [weak self] in self?.history.isActive ?? false }
         history.onFinished = { [weak self] in await self?.historyFinished() }
         #if DEBUG
         if let i = CommandLine.arguments.firstIndex(of: "-simulateHistory") {

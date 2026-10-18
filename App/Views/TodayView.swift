@@ -79,16 +79,29 @@ struct TodayView: View {
     private var syncBanner: some View {
         let h = model.history
         return Card {
-            HStack(spacing: 10) {
-                ProgressView()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Syncing your strap").font(.subheadline.weight(.semibold))
-                    Text(h.recordsDecoded == 0 ? "Asking for what it recorded…" : "\(h.recordsDecoded.formatted()) records · \(h.chunks) chunks saved").font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    if h.progress == nil { ProgressView() }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(h.phase == .finishing ? "Cleaning up and analysing" : "Syncing your strap").font(.subheadline.weight(.semibold))
+                        Text(syncDetail(h)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Stop") { h.cancel() }.font(.caption.weight(.semibold))
                 }
-                Spacer()
-                Button("Stop") { h.cancel() }.font(.caption.weight(.semibold))
+                if let p = h.progress { ProgressView(value: p) }
             }
         }
+    }
+
+    private func syncDetail(_ h: HistorySync) -> String {
+        if h.recordsDecoded == 0 { return "Asking for what it recorded…" }
+        var parts = ["\(h.recordsDecoded.formatted()) records"]
+        if let p = h.progress { parts.append("\(Int(p * 100))%") }
+        if h.phase == .finishing { parts.append("almost done") }
+        else if let e = h.etaSeconds { parts.append(e < 90 ? "~\(max(5, Int((e / 5).rounded()) * 5)) s left" : "~\(Int((e / 60).rounded())) min left") }
+        else if let t = h.estimateText { parts.append("est. \(t)") }
+        return parts.joined(separator: " · ")
     }
 
     /// Real-strap mode before there is any history.
