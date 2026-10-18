@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Charts
 import StrandAnalytics
 
@@ -7,8 +8,8 @@ struct SleepView: View {
 
     var content: some View {
             VStack(spacing: 14) {
-                if let n = model.lastNight { hypnogram(n); alarmCard; metrics(n) }
-                else { alarmCard; Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
+                if let n = model.lastNight { hypnogram(n); marksCard; alarmCard; metrics(n) }
+                else { marksCard; alarmCard; Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
                 needDebt
                 stageTrend
                 Disclaimer()
@@ -28,6 +29,32 @@ struct SleepView: View {
             .background { AmbientBackground(tint: Palette.lavenderRich[0]) }
             .navigationTitle("Sleep")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var marksCard: some View {
+        let m = model.markedNight
+        let asleep = model.isMarkedAsleep
+        func t(_ x: Double) -> String { Date(timeIntervalSince1970: x).formatted(date: .omitted, time: .shortened) }
+        return Card(title: "Sleep marks", subtitle: "Tell the app when you sleep — it anchors detection", icon: "moon.zzz.fill") {
+            HStack(spacing: 10) {
+                Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); withAnimation { model.markBed() } } label: {
+                    Label("Going to bed", systemImage: "bed.double.fill").frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).tint(Palette.lavenderRich[1]).disabled(asleep)
+                Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); withAnimation { model.markWake() } } label: {
+                    Label("I woke up", systemImage: "sun.max.fill").frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).tint(Palette.butterRich[1])
+            }
+            HStack {
+                Group {
+                    if asleep, let b = m.bed { Label("Sleeping since \(t(b))", systemImage: "zzz") }
+                    else if let b = m.bed, let w = m.wake { Label("Bed \(t(b)) · up \(t(w)) · \(fmtDuration((w - b) / 60))", systemImage: "checkmark.circle") }
+                    else if let w = m.wake { Label("Woke up \(t(w))", systemImage: "checkmark.circle") }
+                    else { Label("Nothing marked yet", systemImage: "circle.dashed") }
+                }.font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if !(model.snapshot.sleepMarks ?? []).isEmpty { Button("Undo") { model.undoLastMark() }.font(.caption.weight(.semibold)) }
+            }
         }
     }
 

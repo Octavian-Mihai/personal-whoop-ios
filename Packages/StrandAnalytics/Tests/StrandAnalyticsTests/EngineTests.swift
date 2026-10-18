@@ -86,6 +86,23 @@ final class EngineTests: XCTestCase {
         XCTAssertEqual(WindDownNudge.minuteOfDay(wakeMinute: 6 * 60).minute, 21 * 60 + 30)
     }
 
+    func testSleepMarksRefineDetection() {
+        let data = 0.0...100_000
+        let detected = [(start: 3_600.0, end: 30_000.0)]
+        // both marks: user's window wins
+        let both = SleepDetector.refine(detected: detected, bed: 1_000, wake: 28_000, dataRange: data)
+        XCTAssertEqual(both.count, 1); XCTAssertEqual(both[0].start, 1_000); XCTAssertEqual(both[0].end, 28_000)
+        // bed only, close: start snaps
+        XCTAssertEqual(SleepDetector.refine(detected: detected, bed: 2_000, wake: nil, dataRange: data)[0].start, 2_000)
+        // wake only, close: end snaps
+        XCTAssertEqual(SleepDetector.refine(detected: detected, bed: nil, wake: 31_000, dataRange: data)[0].end, 31_000)
+        // far-away marks are ignored
+        XCTAssertEqual(SleepDetector.refine(detected: detected, bed: 60_000, wake: nil, dataRange: data)[0].start, 3_600)
+        // an absurd window (> 16 h) isn't used as a window; each mark is judged on its own (bed snaps, far wake ignored)
+        let odd = SleepDetector.refine(detected: detected, bed: 0, wake: 70_000, dataRange: data)[0]
+        XCTAssertEqual(odd.start, 0); XCTAssertEqual(odd.end, 30_000)
+    }
+
     func testSnoozeRingsAgainAfterDelay() {
         let fired = Date(timeIntervalSince1970: 1_760_000_000)               // an alarm that just went off
         let again = SmartAlarm.snoozeInstant(firedAt: fired, delayMinutes: 4, count: 0)!

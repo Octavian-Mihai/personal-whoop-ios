@@ -88,8 +88,8 @@ final class AppModel {
         var hrvB = Baseline(metric: .hrv), rhrB = Baseline(metric: .restingHR), respB = Baseline(metric: .respiration)
         var effortHist: [Double] = []
         var updated = snapshot.days
-        // fold today's raw-derived night into the last row
-        if let raw, let night = raw.sleep, !updated.isEmpty {
+        // fold today's raw-derived night (anchored by the user's bed/wake marks when present) into the last row
+        if let raw, let night = effectiveNight(raw), !updated.isEmpty {
             lastNight = night
             var m = updated[updated.count - 1]
             if let h = night.hrv { m.hrv = h }
@@ -236,6 +236,47 @@ final class AppModel {
         let now = Date().timeIntervalSince1970
         snapshot.liveHR.append(HRSample(t: now, bpm: Double(bpm)))
         if snapshot.liveHR.count > 20_000 { snapshot.liveHR.removeFirst(2_000) }
+    }
+
+    // MARK: sleep marks
+    var sleepMarks: [SleepMark] { (snapshot.sleepMarks ?? []).sorted { $0.time < $1.time } }
+
+    /// The latest bed mark and the wake mark that closed it. A wake with no bed before it is returned alone.
+    var markedNight: (bed: Double?, wake: Double?) {
+        let m = sleepMarks
+        guard let bed = m.last(where: { $0.kind == .bed }) else { return (nil, m.last(where: { $0.kind == .wake })?.time) }
+        let wake = m.first { $0.kind == .wake && $0.time > bed.time }
+        return (bed.time, wake?.time)
+    }
+    var isMarkedAsleep: Bool { let n = markedNight; return n.bed != nil && n.wake == nil }
+
+    func markBed(at date: Date = Date()) {
+        snapshot.sleepMarks = (snapshot.sleepMarks ?? []) + [SleepMark(kind: .bed, time: date.timeIntervalSince1970)]
+        save()
+    }
+    func markWake(at date: Date = Date()) {
+        snapshot.sleepMarks = (snapshot.sleepMarks ?? []) + [SleepMark(kind: .wake, time: date.timeIntervalSince1970)]
+        recompute()
+    }
+    func undoLastMark() {
+        guard var m = snapshot.sleepMarks, !m.isEmpty else { return }
+        m.removeLast(); snapshot.sleepMarks = m
+        recompute()
+    }
+
+    /// Detected night, snapped to what the user told us. Re-stages inside the corrected window.
+    private func effectiveNight(_ raw: RawDay) -> SleepSession? {
+        let m = markedNight
+        guard m.bed != nil || m.wake != nil, let first = raw.hr.first?.t, let last = raw.hr.last?.t else { return raw.sleep }
+        let detected = raw.sleep.map { [(start: $0.start, end: $0.end)] } ?? []
+        guard let w = SleepDetector.refine(detected: detected, bed: m.bed, wake: m.wake, dataRange: first...last).first else { return raw.sleep }
+        if let s = raw.sleep, s.start == w.start, s.end == w.end { return s }
+        let segs = SleepStager.stage(start: w.start, end: w.end, hr: raw.hr, gravity: raw.gravity)
+        guard !segs.isEmpty else { return raw.sleep }
+        let beats = raw.rr.filter { $0.t >= w.start && $0.t <= w.end }
+        return SleepSession(start: w.start, end: w.end, segments: segs,
+                            restingHR: SleepStager.restingHR(hr: raw.hr, start: w.start, end: w.end),
+                            hrv: HRVAnalyzer.nightlyRMSSD(beats))
     }
 
     // MARK: alarm

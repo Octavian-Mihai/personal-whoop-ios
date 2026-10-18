@@ -96,11 +96,20 @@ struct SavedWorkout: Codable, Identifiable, Equatable {
     var typeGuess: String?
 }
 
+/// "Going to bed" / "I woke up" taps, used to anchor sleep detection.
+struct SleepMark: Codable, Identifiable, Equatable {
+    enum Kind: String, Codable { case bed, wake }
+    var id = UUID()
+    var kind: Kind
+    var time: Double
+}
+
 struct Snapshot: Codable {
     var settings = AppSettings()
     var days: [DailyMetric] = []
     var ui: UISettings?
     var dismissedSuggestions: [Double]?
+    var sleepMarks: [SleepMark]?
     var hydration: [HydrationLog] = []
     var workouts: [SavedWorkout] = []
     var liveHR: [HRSample] = []

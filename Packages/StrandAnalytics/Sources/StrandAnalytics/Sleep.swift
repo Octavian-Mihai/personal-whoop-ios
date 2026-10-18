@@ -103,6 +103,25 @@ public enum SleepDetector {
         return out
     }
 
+    /// Folds the user's own "going to bed" / "I woke up" marks into detected sleep spans.
+    /// - Both marks (wake after bed, ≤ 16 h): the user's window wins, clipped to the data we have.
+    /// - Only a bed mark: the first span's start snaps to it if it was within 3 h.
+    /// - Only a wake mark: the last span's end snaps to it if it was within 3 h.
+    /// Marks far from anything detected are ignored rather than trusted blindly.
+    public static func refine(detected: [(start: Double, end: Double)], bed: Double?, wake: Double?,
+                              dataRange: ClosedRange<Double>) -> [(start: Double, end: Double)] {
+        let tol = 3 * 3600.0
+        if let b = bed, let w = wake, w > b, w - b <= maxSpanH * 3600 {
+            let s = max(b, dataRange.lowerBound), e = min(w, dataRange.upperBound)
+            if e - s > 30 * 60 { return [(s, e)] }
+            return detected
+        }
+        var out = detected
+        if let b = bed, let first = out.first, abs(first.start - b) <= tol, b < first.end { out[0].start = b }
+        if let w = wake, let last = out.last, abs(last.end - w) <= tol, w > last.start { out[out.count - 1].end = w }
+        return out
+    }
+
     /// HR-only fallback: anchor = 10th percentile, asleep ≤ anchor × 1.05, 60 s epochs. Under-reads on purpose.
     public static func hrOnly(_ hr: [HRSample]) -> [(start: Double, end: Double)] {
         guard hr.count >= 120 else { return [] }
