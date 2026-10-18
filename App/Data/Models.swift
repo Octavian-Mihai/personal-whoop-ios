@@ -126,7 +126,7 @@ enum TodayCard: String, CaseIterable, Codable, Identifiable {
 }
 
 enum AppTab: String, CaseIterable, Codable, Identifiable {
-    case sleep, trends, workouts, breathe
+    case sleep, trends, workouts
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
 }

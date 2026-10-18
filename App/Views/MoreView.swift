@@ -11,29 +11,30 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Long-term") {
-                    if on("vitality") { NavigationLink("Vitality & Fitness Age") { LongevityView() } }
-                    if on("circadian") { NavigationLink("Body clock & jet lag") { CircadianView() } }
-                    if on("cycle") { NavigationLink("Cycle awareness") { CycleView() } }
-                    if on("illness") { NavigationLink("Illness watch") { IllnessView() } }
+                Section("Preferences") {
+                    NavigationLink { SettingsView() } label: { Label("Profile & units", systemImage: "person.crop.circle") }
+                    NavigationLink { PersonalizeView() } label: { Label("Personalize", systemImage: "slider.horizontal.3") }
+                    NavigationLink { NotificationsView() } label: { Label("Notifications", systemImage: "bell.badge") }
                 }
                 Section("Strap") {
-                    if on("alarms") { NavigationLink("Alarms & wind-down") { AlarmView() } }
-                    NavigationLink("Device & sync") { DeviceView() }
+                    NavigationLink { DeviceView() } label: { Label("Device & sync", systemImage: "dot.radiowaves.left.and.right") }
+                    if on("alarms") { NavigationLink { AlarmView() } label: { Label("Alarms & wind-down", systemImage: "alarm") } }
                 }
-                Section("Data") {
-                    if on("fusion") { NavigationLink("Combining sources") { FusionView() } }
-                    NavigationLink("Backup & restore") { BackupView() }
-                    if on("testcentre") { NavigationLink("Test Centre") { TestCentreView() } }
+                Section("Wellbeing") {
+                    NavigationLink { BreatheView() } label: { Label("Breathe & HRV tools", systemImage: "wind") }
+                    if on("vitality") { NavigationLink { LongevityView() } label: { Label("Vitality & Fitness Age", systemImage: "hourglass") } }
+                    if on("circadian") { NavigationLink { CircadianView() } label: { Label("Body clock & jet lag", systemImage: "clock.arrow.2.circlepath") } }
+                    if on("cycle") { NavigationLink { CycleView() } label: { Label("Cycle awareness", systemImage: "moon.circle") } }
+                    if on("illness") { NavigationLink { IllnessView() } label: { Label("Illness watch", systemImage: "thermometer.medium") } }
                 }
-                Section("Settings") {
-                    NavigationLink("Personalize") { PersonalizeView() }
-                    NavigationLink("Profile & preferences") { SettingsView() }
-                    NavigationLink("Notifications") { NotificationsView() }
-                    NavigationLink("About & honesty rules") { AboutView() }
+                Section("Data & about") {
+                    NavigationLink { BackupView() } label: { Label("Backup & restore", systemImage: "externaldrive") }
+                    if on("fusion") { NavigationLink { FusionView() } label: { Label("Combining sources", systemImage: "square.stack.3d.up") } }
+                    if on("testcentre") { NavigationLink { TestCentreView() } label: { Label("Test Centre", systemImage: "stethoscope") } }
+                    NavigationLink { AboutView() } label: { Label("About & honesty rules", systemImage: "info.circle") }
                 }
             }
-            .navigationTitle("More")
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -362,7 +363,7 @@ struct SettingsView: View {
             Section("Data") {
                 Toggle("Demo data", isOn: Binding(get: { model.settings.useDemoData }, set: { model.settings.useDemoData = $0 }))
             }
-        }.navigationTitle("Settings")
+        }.navigationTitle("Profile & units")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

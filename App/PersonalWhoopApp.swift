@@ -13,8 +13,7 @@ struct PersonalWhoopApp: App {
                 if show(.sleep) { SleepView().tabItem { Label("Sleep", systemImage: "bed.double.fill") } }
                 if show(.trends) { TrendsView().tabItem { Label("Trends", systemImage: "chart.line.uptrend.xyaxis") } }
                 if show(.workouts) { WorkoutsView().tabItem { Label("Workouts", systemImage: "figure.run") } }
-                if show(.breathe) { BreatheView().tabItem { Label("Breathe", systemImage: "wind") } }
-                MoreView().tabItem { Label("More", systemImage: "ellipsis.circle") }
+                MoreView().tabItem { Label("Settings", systemImage: "gearshape.fill") }
             }
             .environment(model)
             .task { if SnapshotExporter.requested { await SnapshotExporter.run(model: model) } }

@@ -12,7 +12,7 @@ struct BreatheView: View {
     @State private var lastStageIdx = -1
 
     var body: some View {
-        NavigationStack {
+        Group {
             List {
                 if running { runner }
                 else {
