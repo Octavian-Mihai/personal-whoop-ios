@@ -298,3 +298,38 @@ struct VitalRow: View {
         .contentShape(Rectangle())
     }
 }
+
+/// Strap battery at a glance. Shows the live value when connected, otherwise the last reading with its age.
+struct BatteryPill: View {
+    var percent: Double?
+    var live: Bool
+    var lastSeen: Date?
+
+    private var symbol: String {
+        guard let p = percent else { return "battery.0percent" }
+        return p > 87 ? "battery.100percent" : (p > 62 ? "battery.75percent" : (p > 37 ? "battery.50percent" : (p > 12 ? "battery.25percent" : "battery.0percent")))
+    }
+    private var tint: Color {
+        guard let p = percent else { return .secondary }
+        return p <= 15 ? Palette.clay : (p <= 30 ? Palette.butterRich[1] : Palette.sage)
+    }
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol).font(.subheadline).foregroundStyle(tint)
+            if let p = percent {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(String(format: "%.0f%%", p)).font(.subheadline.weight(.semibold).monospacedDigit())
+                    if !live, let t = lastSeen {
+                        Text("seen ") .font(.system(size: 9)).foregroundStyle(.secondary)
+                            + Text(t, format: .relative(presentation: .numeric, unitsStyle: .narrow)).font(.system(size: 9)).foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Text(live ? "Reading…" : "Connect").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(tint.opacity(0.14), in: Capsule())
+        .foregroundStyle(.primary)
+    }
+}

@@ -37,19 +37,24 @@ struct TodayView: View {
     private var header: some View {
         let h = Calendar.current.component(.hour, from: Date())
         let greet = h < 12 ? "Good morning" : (h < 18 ? "Good afternoon" : "Good evening")
-        return HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greet).font(.title2.bold())
-                Text(Date().formatted(.dateTime.weekday(.wide).month().day())).font(.caption).foregroundStyle(.secondary)
+        return HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(greet).font(.title2.bold()).lineLimit(1).minimumScaleFactor(0.8)
+                HStack(spacing: 8) {
+                    Text(Date().formatted(.dateTime.weekday(.wide).month().day())).font(.caption).foregroundStyle(.secondary)
+                    if model.streak.current > 0 {
+                        Label("\(model.streak.current)", systemImage: "flame.fill").font(.caption.bold()).foregroundStyle(Palette.clay)
+                    }
+                }
             }
-            Spacer()
-            if model.streak.current > 0 {
-                Label("\(model.streak.current)", systemImage: "flame.fill").font(.subheadline.bold())
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(Palette.peach[0].opacity(0.5), in: Capsule()).foregroundStyle(Palette.clay)
-            }
+            Spacer(minLength: 8)
+            NavigationLink { DeviceView() } label: {
+                BatteryPill(percent: model.ble.batteryPercent ?? model.ble.lastBattery?.percent,
+                            live: model.ble.state == .connected && model.ble.batteryPercent != nil,
+                            lastSeen: model.ble.lastBattery?.at)
+            }.buttonStyle(.plain)
         }
-            }
+    }
 
     @ViewBuilder private func cardView(_ c: TodayCard) -> some View {
         switch c {

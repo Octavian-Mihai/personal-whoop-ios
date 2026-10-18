@@ -45,6 +45,7 @@ final class AppModel {
         ble.onHR = { [weak self] bpm, rr in self?.ingestLive(bpm: bpm, rr: rr) }
         recompute()
         loadRawAsync()
+        ble.connect()   // reconnect automatically so battery and live HR are there when the app opens
     }
 
     // MARK: persistence

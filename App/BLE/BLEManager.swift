@@ -15,6 +15,8 @@ final class BLEManager: NSObject {
     var family: WhoopFamily?
     var heartRate: Int?
     var batteryPercent: Double?
+    /// Last battery reading ever received, kept across launches so the app can show it before the strap reconnects.
+    var lastBattery: (percent: Double, at: Date)?
     var lastRR: [Double] = []
     var log: [String] = []
     var lastFrameCount = 0
@@ -32,7 +34,18 @@ final class BLEManager: NSObject {
 
     override init() {
         super.init()
+        let d = UserDefaults.standard
+        if let t = d.object(forKey: "lastBatteryAt") as? Double, d.object(forKey: "lastBatteryPct") != nil {
+            lastBattery = (d.double(forKey: "lastBatteryPct"), Date(timeIntervalSince1970: t))
+        }
         central = CBCentralManager(delegate: self, queue: .main, options: [CBCentralManagerOptionRestoreIdentifierKey: "com.octa.personalwhoop.central"])
+    }
+
+    private func setBattery(_ v: Double) {
+        batteryPercent = v
+        lastBattery = (v, Date())
+        UserDefaults.standard.set(v, forKey: "lastBatteryPct")
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastBatteryAt")
     }
 
     private func note(_ s: String) {
@@ -177,7 +190,7 @@ extension BLEManager: CBCentralManagerDelegate, CBPeripheralDelegate {
             if id == "2a37" {
                 if let r = WhoopDecoder.standardHR(bytes) { ingestHR(bpm: r.bpm, rr: r.rrMs) }
             } else if id == "2a19", let b = bytes.first, family != .whoop4 {
-                batteryPercent = Double(b)           // 4.0's 2A19 is a stub constant of 100
+                setBattery(Double(b))           // 4.0's 2A19 is a stub constant of 100
             } else {
                 let frames = reassembler.feed(bytes)
                 lastFrameCount += frames.count
@@ -192,7 +205,7 @@ extension BLEManager: CBCentralManagerDelegate, CBPeripheralDelegate {
             if f.command == WhoopCommand.getBatteryLevel.rawValue, f.payload.count >= 3 {
                 // result byte at payload[?]; battery u16 follows. Logged, never trusted blindly.
                 let raw = UInt16(f.payload[f.payload.count >= 4 ? 2 : 1]) | UInt16(f.payload[f.payload.count >= 4 ? 3 : 2]) << 8
-                if raw <= 1000 { batteryPercent = WhoopDecoder.batteryPercent(u16Value: raw) }
+                if raw <= 1000 { setBattery(WhoopDecoder.batteryPercent(u16Value: raw)) }
             }
         case PacketType.event.rawValue:
             let ev = f.inner.count > 3 ? f.inner[3] : 0
