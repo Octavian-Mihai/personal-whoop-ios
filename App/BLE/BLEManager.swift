@@ -2,6 +2,7 @@ import Foundation
 import CoreBluetooth
 import Observation
 import WhoopProtocol
+import StrandAnalytics
 
 /// CoreBluetooth central for WHOOP 4.0 / 5-MG and any standard HR strap (service 180D).
 /// Only the reversible command set in `WhoopCommand` can be sent.
@@ -23,6 +24,8 @@ final class BLEManager: NSObject {
     var wristOn: Bool?
     var onHR: ((Int, [Double]) -> Void)?
     var onBattery: ((Double) -> Void)?
+    /// Recent (time, percent) readings, kept across launches to estimate the time left.
+    private(set) var batteryHistory: [(t: Double, soc: Double)] = []
     var onHistoryFrame: ((Frame) -> Void)?
     var onReady: (() -> Void)?
     var onDisconnect: (() -> Void)?
@@ -44,6 +47,7 @@ final class BLEManager: NSObject {
         if let t = d.object(forKey: "lastBatteryAt") as? Double, d.object(forKey: "lastBatteryPct") != nil {
             lastBattery = (d.double(forKey: "lastBatteryPct"), Date(timeIntervalSince1970: t))
         }
+        batteryHistory = (d.array(forKey: "batteryHistory") as? [[Double]] ?? []).compactMap { $0.count == 2 ? ($0[0], $0[1]) : nil }
         central = CBCentralManager(delegate: self, queue: .main, options: [CBCentralManagerOptionRestoreIdentifierKey: "com.octa.personalwhoop.central"])
     }
 
@@ -52,7 +56,20 @@ final class BLEManager: NSObject {
         lastBattery = (v, Date())
         UserDefaults.standard.set(v, forKey: "lastBatteryPct")
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastBatteryAt")
+        let now = Date().timeIntervalSince1970
+        if let last = batteryHistory.last, now - last.t < 300, abs(last.soc - v) < 1 {} else {
+            batteryHistory.append((now, v))
+            if batteryHistory.count > 600 { batteryHistory.removeFirst(batteryHistory.count - 600) }
+            UserDefaults.standard.set(batteryHistory.map { [$0.t, $0.soc] }, forKey: "batteryHistory")
+        }
         onBattery?(v)
+    }
+    /// Estimated hours until the strap hits 0 %.
+    var hoursToEmpty: Double? {
+        guard let cur = batteryPercent ?? lastBattery?.percent else { return nil }
+        var s = batteryHistory
+        if s.last?.soc != cur { s.append((lastBattery?.at.timeIntervalSince1970 ?? Date().timeIntervalSince1970, cur)) }
+        return BatteryEstimator.hoursToEmpty(series: s, ratedHours: family == .whoop5 ? BatteryEstimator.ratedHours5 : BatteryEstimator.ratedHours4)
     }
 
     private func note(_ s: String) {

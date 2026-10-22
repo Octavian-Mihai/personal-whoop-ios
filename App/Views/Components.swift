@@ -307,6 +307,7 @@ struct BatteryPill: View {
     var percent: Double?
     var live: Bool
     var lastSeen: Date?
+    var hoursLeft: Double?
 
     private var symbol: String {
         guard let p = percent else { return "battery.0percent" }
@@ -316,12 +317,18 @@ struct BatteryPill: View {
         guard let p = percent else { return .secondary }
         return p <= 15 ? Palette.clay : (p <= 30 ? Palette.butterRich[1] : Palette.sage)
     }
+    static func format(_ h: Double) -> String {
+        h >= 48 ? String(format: "%.1f d", h / 24) : String(format: "%.0f h", max(1, h))
+    }
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: symbol).font(.subheadline).foregroundStyle(tint)
             if let p = percent {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(String(format: "%.0f%%", p)).font(.subheadline.weight(.semibold).monospacedDigit())
+                    if let h = hoursLeft {
+                        Text("~\(Self.format(h)) to 0%").font(.system(size: 9)).foregroundStyle(.secondary)
+                    }
                     if !live, let t = lastSeen {
                         Text("seen ") .font(.system(size: 9)).foregroundStyle(.secondary)
                             + Text(t, format: .relative(presentation: .numeric, unitsStyle: .narrow)).font(.system(size: 9)).foregroundStyle(.secondary)

@@ -93,7 +93,6 @@ final class AppModel {
         loadRawAsync()
         let nc = NotificationCenter.default
         nc.addObserver(forName: .strapAlarmFired, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.alarmDidFire() } }
-        nc.addObserver(forName: .strapDoubleTap, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.stopSnooze() } }
         ble.connect()   // reconnect automatically so battery and live HR are there when the app opens
     }
 
@@ -628,7 +627,7 @@ final class AppModel {
     var nextAlarm: Date? {
         if let s = snoozeUntil { return s }
         let a = settings.alarm
-        return a.enabled ? SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays) : nil
+        return a.enabled ? SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays, overrides: a.dayMinutes ?? [:]) : nil
     }
 
     /// Arms the strap + phone backup for the next wake time and schedules the wind-down nudge.
@@ -636,13 +635,19 @@ final class AppModel {
         defer { syncWidgets() }
         let a = settings.alarm
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["alarm-backup", "wind-down"])
+        center.removePendingNotificationRequests(withIdentifiers: ["alarm-backup", "wind-down"] + (snoozeCount == 0 ? Self.snoozeIDs : []))
         guard a.enabled || a.windDown else { ble.disarmAlarm(); return }
         center.requestAuthorization(options: [.alert, .sound]) { ok, _ in
             guard ok else { return }
             Task { @MainActor in
-                if a.enabled, let d = SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays) {
+                if a.enabled, let d = SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays, overrides: a.dayMinutes ?? [:]) {
                     self.scheduleAlarmNotification(id: "alarm-backup", at: d, title: "Wake up", body: "Your alarm")
+                    // Snooze rings are queued up front so they still come if the first one was stopped on the strap.
+                    if a.snooze, self.snoozeCount == 0 {
+                        for k in 1...SmartAlarm.maxSnoozes {
+                            self.scheduleAlarmNotification(id: Self.snoozeIDs[k - 1], at: d.addingTimeInterval(Double(a.snoozeMinutes * 60 * k)), title: "Wake up", body: "Alarm ringing again")
+                        }
+                    }
                     self.ble.armAlarm(at: d)
                 }
                 if a.windDown {
@@ -668,15 +673,17 @@ final class AppModel {
               let d = SmartAlarm.snoozeInstant(firedAt: Date(), delayMinutes: a.snoozeMinutes, count: snoozeCount) else { stopSnooze(); return }
         snoozeCount += 1
         snoozeUntil = d
-        scheduleAlarmNotification(id: "alarm-snooze", at: d, title: "Wake up", body: "Alarm ringing again")
         ble.armAlarm(at: d)
     }
 
-    /// Ends the snooze chain (double-tap on the strap, opening the app, or the Stop button) and re-arms the regular alarm.
+    private static let snoozeIDs = (1...SmartAlarm.maxSnoozes).map { "alarm-snooze-\($0)" }
+
+    /// Ends the snooze chain and re-arms the regular alarm. Only the Stop button (or running out of snoozes) does this:
+    /// silencing the first ring on the strap or opening the app does not cancel the snooze.
     func stopSnooze() {
         guard snoozeUntil != nil || snoozeCount > 0 else { return }
         snoozeCount = 0; snoozeUntil = nil
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["alarm-snooze"])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: Self.snoozeIDs)
         applyAlarm()
     }
 

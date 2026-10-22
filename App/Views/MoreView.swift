@@ -167,6 +167,38 @@ struct WeekdayPicker: View {
     }
 }
 
+/// One row per weekday: on/off plus its own wake time (falls back to the default time).
+struct DayAlarmEditor: View {
+    @Environment(AppModel.self) private var model
+    private func date(_ m: Int) -> Date { Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: Date())! }
+    var body: some View {
+        let cal = Calendar.current
+        ForEach(0..<7, id: \.self) { i in
+            let wd = (cal.firstWeekday - 1 + i) % 7 + 1
+            let a = model.settings.alarm
+            let on = a.weekdays.isEmpty || a.weekdays.contains(wd)
+            HStack {
+                Toggle(cal.weekdaySymbols[wd - 1], isOn: Binding(get: { on }, set: { v in
+                    var set = model.settings.alarm.weekdays.isEmpty ? Set(1...7) : model.settings.alarm.weekdays
+                    if v { set.insert(wd) } else { set.remove(wd) }
+                    model.settings.alarm.weekdays = set.count == 7 ? [] : set
+                    model.applyAlarm()
+                }))
+                DatePicker("", selection: Binding(get: { date(a.dayMinutes?[wd] ?? a.wakeMinute) }, set: {
+                    let c = Calendar.current.dateComponents([.hour, .minute], from: $0)
+                    var d = model.settings.alarm.dayMinutes ?? [:]
+                    d[wd] = c.hour! * 60 + c.minute!
+                    model.settings.alarm.dayMinutes = d
+                    model.applyAlarm()
+                }), displayedComponents: .hourAndMinute).labelsHidden().disabled(!on).opacity(on ? 1 : 0.4)
+            }
+        }
+        if model.settings.alarm.dayMinutes?.isEmpty == false {
+            Button("Reset all days to default time") { model.settings.alarm.dayMinutes = nil; model.applyAlarm() }.font(.caption)
+        }
+    }
+}
+
 struct AlarmView: View {
     @Environment(AppModel.self) private var model
     var body: some View {
@@ -177,11 +209,13 @@ struct AlarmView: View {
                     get: { Calendar.current.date(bySettingHour: model.settings.alarm.wakeMinute / 60, minute: model.settings.alarm.wakeMinute % 60, second: 0, of: Date())! },
                     set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); model.settings.alarm.wakeMinute = c.hour! * 60 + c.minute!; model.applyAlarm() }),
                     displayedComponents: .hourAndMinute)
-                WeekdayPicker()
                 if let next = model.nextAlarm { LabeledContent(model.snoozeUntil != nil ? "Rings again" : "Next", value: next.formatted(date: .abbreviated, time: .shortened)) }
             } footer: {
                 Text("The strap holds one absolute alarm and buzzes silently on your wrist — the app re-arms it after every fire, on connect and daily. A phone notification at the same instant is a backup, not a loud alarm. WHOOP 4.0 only; 5/MG arming is experimental.")
             }
+            Section {
+                DayAlarmEditor()
+            } header: { Text("Days & times") } footer: { Text("Set a different wake time for each day, or switch days off. The default time above is used for days you haven't customised.") }
             Section {
                 Toggle("Snooze", isOn: Binding(get: { model.settings.alarm.snooze }, set: { model.settings.alarm.snooze = $0 }))
                 if model.settings.alarm.snooze {
@@ -191,7 +225,7 @@ struct AlarmView: View {
                 }
             } header: { Text("Snooze") } footer: {
                 Text(model.settings.alarm.snooze
-                     ? "If you don't stop it, the alarm rings again \(model.settings.alarm.snoozeMinutes) minutes after it goes off — up to \(SmartAlarm.maxSnoozes) more times. Double-tap the strap or open the app to stop."
+                     ? "If you don't stop it, the alarm rings again \(model.settings.alarm.snoozeMinutes) minutes after it goes off — up to \(SmartAlarm.maxSnoozes) more times. It keeps going even if you silenced the first ring on the strap — tap Stop on the Sleep page to cancel it."
                      : "The alarm rings once and doesn't repeat.")
             }
             Section("Wind-down") {

@@ -53,7 +53,8 @@ struct TodayView: View {
             NavigationLink { DeviceView() } label: {
                 BatteryPill(percent: model.ble.batteryPercent ?? model.ble.lastBattery?.percent,
                             live: model.ble.state == .connected && model.ble.batteryPercent != nil,
-                            lastSeen: model.ble.lastBattery?.at)
+                            lastSeen: model.ble.lastBattery?.at,
+                            hoursLeft: model.ble.hoursToEmpty)
             }.buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

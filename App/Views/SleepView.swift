@@ -86,13 +86,18 @@ struct SleepView: View {
                                 set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); model.settings.alarm.wakeMinute = c.hour! * 60 + c.minute!; model.applyAlarm() }),
                                 displayedComponents: .hourAndMinute).labelsHidden().colorMultiply(.clear)
                         }
-                    Text(next.map { model.snoozeUntil != nil ? "Rings again \($0.formatted(date: .omitted, time: .shortened))" : "Next: \($0.formatted(.dateTime.weekday(.abbreviated).hour().minute()))" } ?? "Off")
-                        .font(.caption).foregroundStyle(model.snoozeUntil != nil ? Palette.clay : .secondary)
+                    if let n = next {
+                        (Text(model.snoozeUntil != nil ? "Rings again \(n.formatted(date: .omitted, time: .shortened))" : "Next: \(n.formatted(.dateTime.weekday(.abbreviated).hour().minute()))")
+                         + Text(" · in ") + Text(n, style: .relative))
+                            .font(.caption).foregroundStyle(model.snoozeUntil != nil ? Palette.clay : .secondary)
+                    } else {
+                        Text("Off").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Toggle("", isOn: Binding(get: { a.enabled }, set: { model.settings.alarm.enabled = $0; model.applyAlarm() })).labelsHidden()
             }
-            WeekdayPicker()
+            DisclosureGroup("Days & times") { DayAlarmEditor() }.font(.subheadline)
             HStack {
                 Label(a.snooze ? "Rings again \(a.snoozeMinutes) min after, up to \(SmartAlarm.maxSnoozes)×" : "No snooze", systemImage: "arrow.clockwise")
                     .font(.caption).foregroundStyle(.secondary)
