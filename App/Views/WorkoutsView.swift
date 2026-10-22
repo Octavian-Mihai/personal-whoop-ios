@@ -41,6 +41,8 @@ struct WorkoutsView: View {
         }
     }
 
+    @State private var moreToRight = true
+
     private var startHero: some View {
         HeroCard(colors: [Palette.peach[0], Palette.rose[0], Palette.lavender[1]]) {
             VStack(alignment: .leading, spacing: 12) {
@@ -64,6 +66,15 @@ struct WorkoutsView: View {
                             }
                         }
                     }
+                }
+                .trackMoreToRight($moreToRight)
+                .overlay(alignment: .trailing) {   // hint that the row scrolls: fades out once the end is reached
+                    Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(Palette.ink)
+                        .frame(width: 26, height: 26)
+                        .background(.white.opacity(0.85), in: Circle())
+                        .shadow(color: .black.opacity(0.12), radius: 3)
+                        .opacity(moreToRight ? 1 : 0).allowsHitTesting(false)
+                        .animation(.easeOut(duration: 0.2), value: moreToRight)
                 }
             }
         }
@@ -297,5 +308,14 @@ struct IntervalTimerView: View {
                 stop()
             }
         }
+    }
+}
+
+private extension View {
+    /// Keeps `more` true while a horizontal scroll view has content past its right edge (iOS 18+; always true before).
+    @ViewBuilder func trackMoreToRight(_ more: Binding<Bool>) -> some View {
+        if #available(iOS 18.0, *) {
+            onScrollGeometryChange(for: Bool.self) { g in g.contentOffset.x + g.containerSize.width < g.contentSize.width - 4 } action: { _, v in more.wrappedValue = v }
+        } else { self }
     }
 }
