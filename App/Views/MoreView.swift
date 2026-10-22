@@ -464,6 +464,35 @@ struct AboutView: View {
     }
 }
 
+/// Reorder and show/hide the Today page cards.
+struct TodayLayoutView: View {
+    @Environment(AppModel.self) private var model
+    @State private var order: [TodayCard] = []
+
+    var body: some View {
+        List {
+            ForEach(order) { card in
+                Toggle(card.title, isOn: Binding(
+                    get: { !model.ui.hiddenCards.contains(card.rawValue) },
+                    set: { on in
+                        var u = model.ui
+                        if on { u.hiddenCards.remove(card.rawValue) } else { u.hiddenCards.insert(card.rawValue) }
+                        model.ui = u
+                    }))
+            }
+            .onMove { from, to in
+                order.move(fromOffsets: from, toOffset: to)
+                var u = model.ui; u.cardOrder = order.map(\.rawValue); model.ui = u
+            }
+            Section { Button("Reset order", role: .destructive) { var u = model.ui; u.cardOrder = nil; model.ui = u; order = u.orderedCards } }
+        }
+        .environment(\.editMode, .constant(.active))
+        .navigationTitle("Arrange Today")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { order = model.ui.orderedCards }
+    }
+}
+
 struct PersonalizeView: View {
     @Environment(AppModel.self) private var model
 
@@ -509,8 +538,11 @@ struct PersonalizeView: View {
                 ForEach(AppTab.allCases) { toggle(\.hiddenTabs, $0.rawValue, title: $0.title) }
                 Text("Today and More are always shown.").font(.caption).foregroundStyle(.secondary)
             }
-            Section("Today page cards") {
-                ForEach(TodayCard.allCases) { toggle(\.hiddenCards, $0.rawValue, title: $0.title) }
+            Section {
+                NavigationLink { TodayLayoutView() } label: { Label("Arrange Today page", systemImage: "arrow.up.arrow.down") }
+            } header: { Text("Today page") } footer: { Text("Choose which cards appear and drag them into the order you want.") }
+            Section("Values on the Charge card") {
+                ForEach(TodayValue.allCases) { toggle(\.hiddenValues, $0.rawValue, title: $0.title) }
             }
             Section("Charge drivers") {
                 Picker("Show", selection: Binding(get: { model.ui.driverDisplay }, set: { var u = model.ui; u.driverDisplay = $0; model.ui = u })) {

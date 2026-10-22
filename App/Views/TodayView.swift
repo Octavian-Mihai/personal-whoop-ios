@@ -13,7 +13,7 @@ struct TodayView: View {
     var content: some View {
             VStack(spacing: 16) {
                 header
-                ForEach(TodayCard.allCases.filter { !model.ui.hiddenCards.contains($0.rawValue) }) { card in
+                ForEach(model.ui.orderedCards.filter { !model.ui.hiddenCards.contains($0.rawValue) }) { card in
                     cardView(card)
                 }
                 Disclaimer()
@@ -69,7 +69,8 @@ struct TodayView: View {
             if !model.settings.useDemoData && model.today?.charge == nil { waitingCard }
             scoreCard
         case .drivers: if let r = model.chargeResult { driversCard(r) }
-        case .live: liveCard; hrTodayCard
+        case .live: liveCard
+        case .heartRate: hrTodayCard
         case .forecast: if let f = model.forecast { forecastCard(f) }
         case .stress: stressCard
         case .hydration: hydrationCard
@@ -140,6 +141,8 @@ struct TodayView: View {
 
     private func series(_ kp: KeyPath<DailyMetric, Double?>) -> [Double] { model.days.suffix(14).compactMap { $0[keyPath: kp] } }
 
+    private func shows(_ v: TodayValue) -> Bool { !model.ui.hiddenValues.contains(v.rawValue) }
+
     private var scoreCard: some View {
         let t = model.today
         let band = t?.charge.map(ChargeBand.of)
@@ -155,28 +158,30 @@ struct TodayView: View {
                             Text(band?.word ?? "Calibrating").font(.headline).foregroundStyle(.white)
                             Text("· \(b?.hrv.count ?? 0) nights").font(.caption).foregroundStyle(.white.opacity(0.8))
                         }
-                        VitalRow(icon: "waveform.path.ecg", label: "HRV", value: t?.hrv.map { String(format: "%.0f ms", $0) } ?? "—",
+                        if shows(.hrv) { VitalRow(icon: "waveform.path.ecg", label: "HRV", value: t?.hrv.map { String(format: "%.0f ms", $0) } ?? "—",
                                  delta: t?.hrv.flatMap { v in b.map { v - $0.hrv.center } }, onDark: true, chip: true, tint: Color(red: 0.12, green: 0.58, blue: 0.62))
-                            .onTapGesture { detail = .hrv }
-                        VitalRow(icon: "heart.fill", label: "Resting HR", value: t?.restingHR.map { String(format: "%.0f bpm", $0) } ?? "—",
+                            .onTapGesture { detail = .hrv } }
+                        if shows(.restingHR) { VitalRow(icon: "heart.fill", label: "Resting HR", value: t?.restingHR.map { String(format: "%.0f bpm", $0) } ?? "—",
                                  delta: t?.restingHR.flatMap { v in b.map { v - $0.restingHR.center } }, higherIsBetter: false, onDark: true, chip: true, tint: Color(red: 0.84, green: 0.30, blue: 0.42))
-                            .onTapGesture { detail = .restingHR }
-                        VitalRow(icon: "lungs.fill", label: "Respiration", value: t?.respiration.map { String(format: "%.1f /min", $0) } ?? "—",
+                            .onTapGesture { detail = .restingHR } }
+                        if shows(.respiration) { VitalRow(icon: "lungs.fill", label: "Respiration", value: t?.respiration.map { String(format: "%.1f /min", $0) } ?? "—",
                                  delta: t?.respiration.flatMap { v in b.map { v - $0.respiration.center } }, deltaFormat: "%+.1f", higherIsBetter: false, onDark: true, chip: true, tint: Color(red: 0.25, green: 0.45, blue: 0.88))
-                            .onTapGesture { detail = .respiration }
+                            .onTapGesture { detail = .respiration } }
                     }
                 }
             }
+            if shows(.effort) || shows(.rest) {
             HStack(spacing: 12) {
-                Card {
+                if shows(.effort) { Card {
                     Ring(value: model.settings.effortOn21Scale ? effort.map { StrainScorer.to21($0) / 21 * 100 } : effort,
                          colors: Palette.skyRich, label: "Effort", unit: model.settings.effortOn21Scale ? "/21" : "", size: 96).frame(maxWidth: .infinity)
                 }
-                .contentShape(Rectangle()).onTapGesture { detail = .effort }
-                Card {
+                .contentShape(Rectangle()).onTapGesture { detail = .effort } }
+                if shows(.rest) { Card {
                     Ring(value: t?.rest, colors: Palette.lavenderRich, label: "Rest", unit: "%", size: 96).frame(maxWidth: .infinity)
                 }
-                .contentShape(Rectangle()).onTapGesture { detail = .rest }
+                .contentShape(Rectangle()).onTapGesture { detail = .rest } }
+            }
             }
         }
     }

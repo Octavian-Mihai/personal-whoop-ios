@@ -44,6 +44,7 @@ struct AlarmSettings: Codable, Equatable {
     var enabled = false
     var wakeMinute = 7 * 60
     var weekdays: Set<Int> = []          // empty = every day
+    var nextOverride: Date? = nil        // one-off time for the next alarm only; the schedule is untouched
     var dayMinutes: [Int: Int]? = nil    // weekday (1=Sun…7) → wake minute, overriding wakeMinute
     var snooze = true
     var snoozeMinutes = 4
@@ -123,7 +124,7 @@ struct Snapshot: Codable {
 }
 
 enum TodayCard: String, CaseIterable, Codable, Identifiable {
-    case workoutSuggestion, scores, drivers, live, forecast, stress, hydration, readiness, illness
+    case workoutSuggestion, scores, drivers, live, heartRate, forecast, stress, hydration, readiness, illness
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -131,6 +132,7 @@ enum TodayCard: String, CaseIterable, Codable, Identifiable {
         case .scores: return "Charge · Effort · Rest"
         case .drivers: return "Charge drivers"
         case .live: return "Live heart rate"
+        case .heartRate: return "Heart rate today"
         case .forecast: return "Tomorrow's Charge"
         case .stress: return "Stress today"
         case .hydration: return "Hydration"
@@ -162,7 +164,45 @@ struct UISettings: Codable, Equatable {
     var lightFromMinute: Int? = nil                // "By time of day": light from this minute…
     var lightToMinute: Int? = nil                  // …until this one, dark otherwise (defaults 07:00–20:00)
     var hiddenCards: Set<String> = []
+    var cardOrder: [String]? = nil                 // Today page card order; nil = default
+    var hiddenValues: Set<String> = []             // vitals / rings hidden on the Charge · Effort · Rest card
     var hiddenTabs: Set<String> = []
     var hiddenMore: Set<String> = []
     var driverDisplay: DriverDisplay = .both
+
+    init() {}
+    /// Every key optional, so a save written by an older build (missing newer fields) still decodes.
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        appearance = try c.decodeIfPresent(AppearanceMode.self, forKey: .appearance)
+        lightFromMinute = try c.decodeIfPresent(Int.self, forKey: .lightFromMinute)
+        lightToMinute = try c.decodeIfPresent(Int.self, forKey: .lightToMinute)
+        hiddenCards = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenCards) ?? []
+        cardOrder = try c.decodeIfPresent([String].self, forKey: .cardOrder)
+        hiddenValues = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenValues) ?? []
+        hiddenTabs = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenTabs) ?? []
+        hiddenMore = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenMore) ?? []
+        driverDisplay = try c.decodeIfPresent(DriverDisplay.self, forKey: .driverDisplay) ?? .both
+    }
+
+    /// Saved order first; any card added since (or never ordered) follows in its default position order.
+    var orderedCards: [TodayCard] {
+        let saved = (cardOrder ?? []).compactMap(TodayCard.init(rawValue:))
+        return saved + TodayCard.allCases.filter { !saved.contains($0) }
+    }
+}
+
+/// Values that can be hidden on the Charge · Effort · Rest card.
+enum TodayValue: String, CaseIterable, Identifiable {
+    case hrv, restingHR, respiration, effort, rest
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .hrv: return "HRV"
+        case .restingHR: return "Resting HR"
+        case .respiration: return "Respiration"
+        case .effort: return "Effort ring"
+        case .rest: return "Rest ring"
+        }
+    }
 }
