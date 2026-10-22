@@ -37,77 +37,9 @@ below were taken in demo mode.
 
 ## Architecture
 
-### Layers
-
-```
-┌────────────────────────────── SwiftUI views (App/Views) ──────────────────────────────┐
-│ Today · Sleep · Trends · Workouts · More · Live workout · Onboarding · Components       │
-└───────────────▲──────────────────────────────────────────────────────────┬────────────┘
-                │ reads (Observation)                                      │ intents (method calls)
-┌───────────────┴──────────────────────────────────────────────────────────▼────────────┐
-│ AppModel  (@Observable, @MainActor)  — single source of truth and orchestrator         │
-│   Snapshot (Codable JSON)  ·  derived state (baselines, scores, forecast, …)           │
-└───▲──────────────▲───────────────▲───────────────▲──────────────▲────────────────────┘
-    │ callbacks    │ async          │ async          │ writes        │ writes
-┌───┴─────┐  ┌─────┴──────┐  ┌──────┴──────┐  ┌──────┴──────┐  ┌─────┴──────────────┐
-│BLEManager│  │HistorySync │  │HealthBridge │  │ Notifier /   │  │ WidgetSnapshot      │
-│CoreBlue- │  │ + History  │  │ (HealthKit) │  │ Live Activity│  │ (App Group defaults)│
-│tooth     │  │ Store actor│  │             │  │              │  │ → Widgets extension │
-└───┬──────┘  └─────┬──────┘  └─────────────┘  └─────────────┘  └─────────────────────┘
-    │ frames        │ records
-┌───▼───────────────▼──────────────────────────────────────────────────────────────────┐
-│ Packages/StrandAnalytics — pure Swift, no UI, no I/O, unit-tested                      │
-│   WhoopProtocol (framing, CRC, reassembly, decoders)                                   │
-│   StrandAnalytics (baselines, HRV, sleep staging, Charge/Effort/Rest, stress, load,    │
-│   workouts, readiness, illness, circadian, cycle, alarms, battery estimator, …)        │
-└───────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Folder map
-
-| Path | Role |
-| --- | --- |
-| `App/Views` | SwiftUI screens and shared components (`Card`, `Ring`, `HeartRateChart`, …) |
-| `App/Data/AppModel.swift` | Observable app model: loads/saves the snapshot, runs `recompute()`, owns alarm and snooze logic |
-| `App/Data/Models.swift` | Codable value types: `Snapshot`, `DailyMetric`, `AppSettings`, `UISettings`, `AlarmSettings`, … |
-| `App/BLE` | `BLEManager` (CoreBluetooth central), `HistorySync` (strap offload) |
-| `App/Data/HistoryStore.swift`, `HistoryAnalyzer.swift` | Append-only record log and its analysis into nights, days and raw streams |
-| `App/Data/HealthBridge.swift`, `LiveActivityController.swift`, `Notifier.swift` | System integrations (HealthKit, ActivityKit, notifications) |
-| `App/Data/Import` | `.noopbak` importer: streaming ZIP and SQLite readers, no third-party code |
-| `App/Debug` | `SimulatedStrap` and `SnapshotExporter` (developer tools) |
-| `Shared`, `Widgets` | Widget views and the snapshot shared with the app through the App Group |
-| `Packages/StrandAnalytics` | The analytics engines and the WHOOP protocol, as a Swift package with tests |
-
-### Design patterns
-
-- **Single observable model, unidirectional data flow.** Views read `AppModel` through the SwiftUI environment and call its
-  methods; they never touch BLE, storage or HealthKit directly. Data enters (strap, history, Health, import), `AppModel`
-  updates its `Snapshot` and calls `recompute()`, and views re-render from the observed state. Uses the iOS 17
-  Observation framework (`@Observable`) rather than `ObservableObject`.
-- **Pure analytics core.** Everything that scores, stages or forecasts lives in the `StrandAnalytics` package as stateless
-  functions over plain values (`HRSample`, `DailyMetric`, …). No UI and no file or settings I/O, and the current time is passed in rather than read, so they
-  are deterministic and unit-tested with `swift test`. The app target is a thin integration layer around them.
-- **Protocol layer separated from transport.** `WhoopProtocol` only knows frames, CRCs and decoders. `BLEManager` owns the
-  CoreBluetooth session and exposes results through closures (`onHR`, `onBattery`) that `AppModel` subscribes to, so the
-  protocol can be tested without Bluetooth.
-- **Durable, resumable sync.** `HistorySync` saves every chunk into `HistoryStore` *before* acknowledging it to the strap, so
-  an interrupted sync never loses data and resumes from where it stopped. `HistoryStore` is an **actor** (append-only binary log,
-  de-duplicated by timestamp), so decoding a large first sync stays off the main thread.
-- **Demo and real data as interchangeable sources.** `DemoData` and `SimulatedStrap` produce the same `RawDay` and history
-  shapes as the real strap, so every screen works without hardware. Demo and real history are never mixed (switching asks
-  for confirmation).
-- **Tolerant, additive persistence.** State is one `Snapshot` encoded as JSON. New fields are optional or decoded with
-  `decodeIfPresent` (see `UISettings`), so saves written by older builds keep loading. If a save ever can't be read, a copy
-  is kept before anything can overwrite it.
-- **Data-driven personalisation.** Today's cards are an enum (`TodayCard`); `UISettings` stores the card order and
-  hidden cards/values, and the view renders `orderedCards` filtered by what's hidden. Adding a card is one enum case plus a
-  `switch` arm.
-- **Extensions share a small snapshot, not the model.** The app writes a compact `WidgetSnapshot` into the App Group;
-  the widget extension and the Live Activity render from that, and neither links the app's model.
-- **Alarm as a scheduler over one hardware slot.** The strap holds a single absolute alarm, so `AppModel` computes the next
-  wake (weekly schedule, with a one-off override on top), arms the strap and a backup phone notification, and queues the
-  snooze rings as notifications up front so they survive the app being suspended.
-- **Debug tooling in the app.** `-simulateHistory N` replays a fake strap and `-snapshot` renders each screen to images.
+SwiftUI views read one observable `AppModel`; it talks to the strap (`BLEManager`, `HistorySync`), storage, HealthKit and the
+widgets, and calls a pure-Swift analytics package (`StrandAnalytics`) for every score. The full diagram, folder map and the
+design patterns are in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Build and run
 
