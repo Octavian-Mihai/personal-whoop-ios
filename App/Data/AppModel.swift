@@ -626,9 +626,32 @@ final class AppModel {
     /// The next time the alarm will ring: the pending snooze if there is one, else the next scheduled wake.
     var nextAlarm: Date? {
         if let s = snoozeUntil { return s }
-        let a = settings.alarm
-        return a.enabled ? SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays, overrides: a.dayMinutes ?? [:]) : nil
+        return settings.alarm.enabled ? nextWake() : nil
     }
+
+    /// Next wake from the weekly schedule alone, ignoring any one-off change.
+    private var scheduledWake: Date? {
+        let a = settings.alarm
+        return SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays, overrides: a.dayMinutes ?? [:])
+    }
+    /// The one-off time if it is still ahead, else the scheduled wake.
+    private func nextWake() -> Date? {
+        if let o = settings.alarm.nextOverride, o > Date() { return o }
+        return scheduledWake
+    }
+    var hasOneOffAlarm: Bool { (settings.alarm.nextOverride ?? .distantPast) > Date() }
+
+    /// Changes only the next alarm (that morning), leaving the weekly schedule as it is.
+    func setNextAlarmTime(minute: Int) {
+        guard let s = scheduledWake else { return }
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: s)
+        c.hour = minute / 60; c.minute = minute % 60; c.second = 0
+        guard var d = Calendar.current.date(from: c) else { return }
+        if d <= Date() { d = Calendar.current.date(byAdding: .day, value: 1, to: d) ?? d }
+        settings.alarm.nextOverride = d
+        applyAlarm()
+    }
+    func clearOneOffAlarm() { settings.alarm.nextOverride = nil; applyAlarm() }
 
     /// Arms the strap + phone backup for the next wake time and schedules the wind-down nudge.
     func applyAlarm() {
@@ -640,7 +663,7 @@ final class AppModel {
         center.requestAuthorization(options: [.alert, .sound]) { ok, _ in
             guard ok else { return }
             Task { @MainActor in
-                if a.enabled, let d = SmartAlarm.next(after: Date(), wakeMinute: a.wakeMinute, weekdays: a.weekdays, overrides: a.dayMinutes ?? [:]) {
+                if a.enabled, let d = self.nextWake() {
                     self.scheduleAlarmNotification(id: "alarm-backup", at: d, title: "Wake up", body: "Your alarm")
                     // Snooze rings are queued up front so they still come if the first one was stopped on the strap.
                     if a.snooze, self.snoozeCount == 0 {

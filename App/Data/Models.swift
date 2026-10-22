@@ -44,6 +44,7 @@ struct AlarmSettings: Codable, Equatable {
     var enabled = false
     var wakeMinute = 7 * 60
     var weekdays: Set<Int> = []          // empty = every day
+    var nextOverride: Date? = nil        // one-off time for the next alarm only; the schedule is untouched
     var dayMinutes: [Int: Int]? = nil    // weekday (1=Sun…7) → wake minute, overriding wakeMinute
     var snooze = true
     var snoozeMinutes = 4

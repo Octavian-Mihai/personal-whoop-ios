@@ -77,19 +77,27 @@ struct SleepView: View {
         return Card(title: "Morning alarm", subtitle: nil, icon: "alarm.fill") {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(Calendar.current.date(bySettingHour: a.wakeMinute / 60, minute: a.wakeMinute % 60, second: 0, of: Date())!, format: .dateTime.hour().minute())
+                    let shown = Calendar.current.dateComponents([.hour, .minute], from: next ?? Calendar.current.date(bySettingHour: a.wakeMinute / 60, minute: a.wakeMinute % 60, second: 0, of: Date())!)
+                    let shownMin = shown.hour! * 60 + shown.minute!
+                    Text(Calendar.current.date(bySettingHour: shownMin / 60, minute: shownMin % 60, second: 0, of: Date())!, format: .dateTime.hour().minute())
                         .font(.system(size: 36, weight: .bold, design: .rounded)).monospacedDigit()
                         .foregroundStyle(a.enabled ? Color.primary : Color.secondary)
-                        .overlay {   // the big time is the picker: tap it to change the wake time
+                        .overlay {   // tap the big time to change tomorrow's alarm only; the weekly schedule stays as it is
                             DatePicker("", selection: Binding(
-                                get: { Calendar.current.date(bySettingHour: a.wakeMinute / 60, minute: a.wakeMinute % 60, second: 0, of: Date())! },
-                                set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); model.settings.alarm.wakeMinute = c.hour! * 60 + c.minute!; model.applyAlarm() }),
+                                get: { Calendar.current.date(bySettingHour: shownMin / 60, minute: shownMin % 60, second: 0, of: Date())! },
+                                set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); model.setNextAlarmTime(minute: c.hour! * 60 + c.minute!) }),
                                 displayedComponents: .hourAndMinute).labelsHidden().colorMultiply(.clear)
                         }
                     if let n = next {
                         (Text(model.snoozeUntil != nil ? "Rings again \(n.formatted(date: .omitted, time: .shortened))" : "Next: \(n.formatted(.dateTime.weekday(.abbreviated).hour().minute()))")
                          + Text(" · in ") + Text(n, style: .relative))
                             .font(.caption).foregroundStyle(model.snoozeUntil != nil ? Palette.clay : .secondary)
+                        if model.hasOneOffAlarm && model.snoozeUntil == nil {
+                            HStack(spacing: 6) {
+                                Text("One-time change").font(.caption2).foregroundStyle(Palette.clay)
+                                Button("Back to schedule") { model.clearOneOffAlarm() }.font(.caption2.weight(.semibold))
+                            }
+                        }
                     } else {
                         Text("Off").font(.caption).foregroundStyle(.secondary)
                     }
