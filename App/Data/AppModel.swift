@@ -102,6 +102,9 @@ final class AppModel {
             snapshot = s
             // anyone who already had data before the first-run screen existed counts as onboarded
             if snapshot.onboarded == nil, !s.days.isEmpty { snapshot.onboarded = true }
+        } else if let d = try? Data(contentsOf: url), !d.isEmpty {
+            // A save exists but couldn't be read. Keep a copy so the next save() can't overwrite the only one.
+            try? d.write(to: url.deletingPathExtension().appendingPathExtension("unreadable-\(Int(Date().timeIntervalSince1970)).json"), options: .atomic)
         }
         // a fresh install stays empty until the first-run choice
     }

@@ -170,6 +170,21 @@ struct UISettings: Codable, Equatable {
     var hiddenMore: Set<String> = []
     var driverDisplay: DriverDisplay = .both
 
+    init() {}
+    /// Every key optional, so a save written by an older build (missing newer fields) still decodes.
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        appearance = try c.decodeIfPresent(AppearanceMode.self, forKey: .appearance)
+        lightFromMinute = try c.decodeIfPresent(Int.self, forKey: .lightFromMinute)
+        lightToMinute = try c.decodeIfPresent(Int.self, forKey: .lightToMinute)
+        hiddenCards = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenCards) ?? []
+        cardOrder = try c.decodeIfPresent([String].self, forKey: .cardOrder)
+        hiddenValues = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenValues) ?? []
+        hiddenTabs = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenTabs) ?? []
+        hiddenMore = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenMore) ?? []
+        driverDisplay = try c.decodeIfPresent(DriverDisplay.self, forKey: .driverDisplay) ?? .both
+    }
+
     /// Saved order first; any card added since (or never ordered) follows in its default position order.
     var orderedCards: [TodayCard] {
         let saved = (cardOrder ?? []).compactMap(TodayCard.init(rawValue:))
