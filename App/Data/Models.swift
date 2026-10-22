@@ -124,7 +124,7 @@ struct Snapshot: Codable {
 }
 
 enum TodayCard: String, CaseIterable, Codable, Identifiable {
-    case workoutSuggestion, scores, drivers, live, forecast, stress, hydration, readiness, illness
+    case workoutSuggestion, scores, drivers, live, heartRate, forecast, stress, hydration, readiness, illness
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -132,6 +132,7 @@ enum TodayCard: String, CaseIterable, Codable, Identifiable {
         case .scores: return "Charge · Effort · Rest"
         case .drivers: return "Charge drivers"
         case .live: return "Live heart rate"
+        case .heartRate: return "Heart rate today"
         case .forecast: return "Tomorrow's Charge"
         case .stress: return "Stress today"
         case .hydration: return "Hydration"
@@ -163,7 +164,30 @@ struct UISettings: Codable, Equatable {
     var lightFromMinute: Int? = nil                // "By time of day": light from this minute…
     var lightToMinute: Int? = nil                  // …until this one, dark otherwise (defaults 07:00–20:00)
     var hiddenCards: Set<String> = []
+    var cardOrder: [String]? = nil                 // Today page card order; nil = default
+    var hiddenValues: Set<String> = []             // vitals / rings hidden on the Charge · Effort · Rest card
     var hiddenTabs: Set<String> = []
     var hiddenMore: Set<String> = []
     var driverDisplay: DriverDisplay = .both
+
+    /// Saved order first; any card added since (or never ordered) follows in its default position order.
+    var orderedCards: [TodayCard] {
+        let saved = (cardOrder ?? []).compactMap(TodayCard.init(rawValue:))
+        return saved + TodayCard.allCases.filter { !saved.contains($0) }
+    }
+}
+
+/// Values that can be hidden on the Charge · Effort · Rest card.
+enum TodayValue: String, CaseIterable, Identifiable {
+    case hrv, restingHR, respiration, effort, rest
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .hrv: return "HRV"
+        case .restingHR: return "Resting HR"
+        case .respiration: return "Respiration"
+        case .effort: return "Effort ring"
+        case .rest: return "Rest ring"
+        }
+    }
 }
