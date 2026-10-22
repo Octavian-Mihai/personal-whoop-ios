@@ -69,7 +69,7 @@ struct TodayView: View {
             if !model.settings.useDemoData && model.today?.charge == nil { waitingCard }
             scoreCard
         case .drivers: if let r = model.chargeResult { driversCard(r) }
-        case .live: liveCard
+        case .live: liveCard; hrTodayCard
         case .forecast: if let f = model.forecast { forecastCard(f) }
         case .stress: stressCard
         case .hydration: hydrationCard
@@ -250,6 +250,12 @@ struct TodayView: View {
     private func forecastCard(_ f: ChargeForecast) -> some View {
         Card(title: "Tomorrow's Charge", subtitle: "Evening estimate from known levers, not a measurement", icon: "sunrise.fill") {
             Text(String(format: "%.0f ± %.0f", f.value, f.band)).font(.title2.bold())
+        }
+    }
+
+    private var hrTodayCard: some View {
+        Card(title: "Heart rate today", subtitle: nil, icon: "heart.text.square") {
+            HeartRateChart(samples: model.raw?.hr ?? [], from: Calendar.current.startOfDay(for: Date()), to: Date())
         }
     }
 

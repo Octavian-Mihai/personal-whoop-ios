@@ -343,3 +343,43 @@ struct BatteryPill: View {
         .foregroundStyle(.primary)
     }
 }
+
+/// Heart-rate evolution over a time window (a day, or a night), bucket-averaged so long ranges stay light.
+struct HeartRateChart: View {
+    var samples: [HRSample]
+    var from: Date
+    var to: Date
+    var emptyText = "No heart-rate data for this period yet."
+
+    private var points: [(t: Date, bpm: Double)] {
+        let s = samples.filter { $0.t >= from.timeIntervalSince1970 && $0.t <= to.timeIntervalSince1970 && $0.bpm > 25 && $0.bpm < 230 }
+        let bucket = max(60, (to.timeIntervalSince(from) / 240).rounded())
+        var sums: [Int: (n: Double, sum: Double)] = [:]
+        for x in s { let k = Int((x.t - from.timeIntervalSince1970) / bucket); sums[k, default: (0, 0)].n += 1; sums[k, default: (0, 0)].sum += x.bpm }
+        return sums.keys.sorted().map { k in (from.addingTimeInterval((Double(k) + 0.5) * bucket), sums[k]!.sum / sums[k]!.n) }
+    }
+
+    var body: some View {
+        let pts = points
+        if pts.count < 2 {
+            Text(emptyText).font(.footnote).foregroundStyle(.secondary)
+        } else {
+            let lo = pts.map(\.bpm).min()!, hi = pts.map(\.bpm).max()!
+            let avg = pts.map(\.bpm).reduce(0, +) / Double(pts.count)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Stat(label: "Low", value: String(format: "%.0f", lo))
+                    Stat(label: "Average", value: String(format: "%.0f", avg))
+                    Stat(label: "High", value: String(format: "%.0f", hi))
+                }
+                Chart(pts, id: \.t) { p in
+                    LineMark(x: .value("Time", p.t), y: .value("bpm", p.bpm)).interpolationMethod(.monotone).foregroundStyle(Color.red.gradient)
+                }
+                .chartXScale(domain: from...to)
+                .chartYScale(domain: max(30, lo - 8)...(hi + 8))
+                .chartXAxis { AxisMarks(values: .automatic(desiredCount: 5)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) } }
+                .frame(height: 160)
+            }
+        }
+    }
+}

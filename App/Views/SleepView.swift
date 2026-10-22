@@ -20,7 +20,7 @@ struct SleepView: View {
                     marksCard
                     alarmCard
                 } else {
-                    if let n = model.lastNight { hypnogram(n); metrics(n) }
+                    if let n = model.lastNight { hypnogram(n); sleepHRCard(n); metrics(n) }
                     else { Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
                     needDebt
                     stageTrend
@@ -185,6 +185,12 @@ struct SleepView: View {
     }
 
     private func pct(_ x: Double, _ total: Double) -> String { total > 0 ? String(format: "%.0f%%", x / total * 100) : "" }
+
+    private func sleepHRCard(_ n: SleepSession) -> some View {
+        Card(title: "Heart rate during sleep", subtitle: nil, icon: "heart.fill") {
+            HeartRateChart(samples: model.raw?.hr ?? [], from: Date(timeIntervalSince1970: n.start), to: Date(timeIntervalSince1970: n.end))
+        }
+    }
 
     private var needDebt: some View {
         Card(title: "Sleep need & debt") {
