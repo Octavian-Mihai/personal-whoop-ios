@@ -20,7 +20,7 @@ struct SleepView: View {
                     marksCard
                     alarmCard
                 } else {
-                    if let n = model.lastNight { hypnogram(n); metrics(n) }
+                    if let n = model.lastNight { hypnogram(n); sleepHRCard(n); metrics(n) }
                     else { Card { Text("No staged night yet — wear the strap overnight.").font(.footnote) } }
                     needDebt
                     stageTrend
@@ -86,13 +86,18 @@ struct SleepView: View {
                                 set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); model.settings.alarm.wakeMinute = c.hour! * 60 + c.minute!; model.applyAlarm() }),
                                 displayedComponents: .hourAndMinute).labelsHidden().colorMultiply(.clear)
                         }
-                    Text(next.map { model.snoozeUntil != nil ? "Rings again \($0.formatted(date: .omitted, time: .shortened))" : "Next: \($0.formatted(.dateTime.weekday(.abbreviated).hour().minute()))" } ?? "Off")
-                        .font(.caption).foregroundStyle(model.snoozeUntil != nil ? Palette.clay : .secondary)
+                    if let n = next {
+                        (Text(model.snoozeUntil != nil ? "Rings again \(n.formatted(date: .omitted, time: .shortened))" : "Next: \(n.formatted(.dateTime.weekday(.abbreviated).hour().minute()))")
+                         + Text(" · in ") + Text(n, style: .relative))
+                            .font(.caption).foregroundStyle(model.snoozeUntil != nil ? Palette.clay : .secondary)
+                    } else {
+                        Text("Off").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Toggle("", isOn: Binding(get: { a.enabled }, set: { model.settings.alarm.enabled = $0; model.applyAlarm() })).labelsHidden()
             }
-            WeekdayPicker()
+            DisclosureGroup("Days & times") { DayAlarmEditor() }.font(.subheadline)
             HStack {
                 Label(a.snooze ? "Rings again \(a.snoozeMinutes) min after, up to \(SmartAlarm.maxSnoozes)×" : "No snooze", systemImage: "arrow.clockwise")
                     .font(.caption).foregroundStyle(.secondary)
@@ -180,6 +185,12 @@ struct SleepView: View {
     }
 
     private func pct(_ x: Double, _ total: Double) -> String { total > 0 ? String(format: "%.0f%%", x / total * 100) : "" }
+
+    private func sleepHRCard(_ n: SleepSession) -> some View {
+        Card(title: "Heart rate during sleep", subtitle: nil, icon: "heart.fill") {
+            HeartRateChart(samples: model.raw?.hr ?? [], from: Date(timeIntervalSince1970: n.start), to: Date(timeIntervalSince1970: n.end))
+        }
+    }
 
     private var needDebt: some View {
         Card(title: "Sleep need & debt") {

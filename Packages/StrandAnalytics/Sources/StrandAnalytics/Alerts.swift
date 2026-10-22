@@ -90,6 +90,21 @@ public enum BatteryEstimator {
         }
         return usableSoc / (100 / ratedHours) / 24
     }
+    /// Hours until the strap reaches 0 %, from the current discharge run (falls back to the rated runtime).
+    public static func hoursToEmpty(series: [(t: Double, soc: Double)], ratedHours: Double) -> Double? {
+        let s = series.sorted { $0.t < $1.t }
+        guard let current = s.last, current.soc > 0 else { return nil }
+        var startIdx = 0
+        for i in 1..<max(1, s.count) where s[i].soc - s[i - 1].soc > 1 { startIdx = i }
+        let run = s[startIdx...]
+        let rated = ratedHours > 0 ? 100 / ratedHours : 0
+        if let f = run.first, current.t - f.t >= 7200, f.soc - current.soc >= 2 {
+            let slope = (f.soc - current.soc) / ((current.t - f.t) / 3600)
+            let capped = max(slope, rated / 1.5)
+            return current.soc / capped
+        }
+        return rated > 0 ? current.soc / rated : nil
+    }
     public static let ratedHours4: Double = 108
     public static let ratedHours5: Double = 288
 }

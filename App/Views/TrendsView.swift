@@ -4,7 +4,7 @@ import StrandAnalytics
 
 struct TrendsView: View {
     @Environment(AppModel.self) private var model
-    @State private var range = 30
+    @AppStorage("trendsRange") private var range = 30
     @State private var detail: MetricKind?
 
     private var slice: [DailyMetric] { Array(model.days.suffix(range)) }

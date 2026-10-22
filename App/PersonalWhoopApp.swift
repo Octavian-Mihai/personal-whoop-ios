@@ -18,7 +18,6 @@ struct PersonalWhoopApp: App {
                 MoreView().tabItem { Label("Settings", systemImage: "gearshape.fill") }
             }
             .environment(model)
-            .onChange(of: scenePhase) { _, phase in if phase == .active { model.stopSnooze() } }
             .task { if SnapshotExporter.requested { await SnapshotExporter.run(model: model) } }
             .preferredColorScheme(model.colorScheme(at: tick))
             .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { tick = $0 }
